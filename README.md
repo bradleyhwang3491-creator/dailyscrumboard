@@ -24,7 +24,9 @@
 | AI | Google Gemini API (gemini-2.5-flash) |
 | 폰트 | Pretendard (CDN) |
 
-## 설치 및 실행
+---
+
+## 로컬 실행 방법
 
 ### 1. 저장소 클론
 
@@ -55,9 +57,6 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
-- **Supabase 키**: [Supabase 대시보드](https://supabase.com) > 프로젝트 > Settings > API
-- **Gemini API 키**: [Google AI Studio](https://aistudio.google.com/apikey)
-
 ### 4. 개발 서버 실행
 
 ```bash
@@ -66,28 +65,84 @@ npm run dev
 
 브라우저에서 `http://localhost:5173` 접속
 
-### 5. 빌드
+---
+
+## 빌드 방법
 
 ```bash
 npm run build
 ```
+
+빌드 결과물은 `dist/` 디렉토리에 생성됩니다.
+
+로컬에서 빌드 결과 미리보기:
+
+```bash
+npm run preview
+```
+
+---
+
+## Vercel 배포 방법
+
+### 사전 준비
+
+1. [vercel.com](https://vercel.com)에 GitHub 계정으로 로그인
+2. **New Project** → 이 저장소 선택 → Import
+
+### Vercel 프로젝트 설정
+
+| 항목 | 값 |
+|------|-----|
+| Framework Preset | **Vite** |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Install Command | `npm install` |
+
+### Vercel 환경변수 등록
+
+**Settings → Environment Variables** 에서 아래 3개를 모두 등록하세요:
+
+| 변수명 | 값 출처 |
+|--------|---------|
+| `VITE_SUPABASE_URL` | Supabase 대시보드 > Settings > API > Project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase 대시보드 > Settings > API > anon public |
+| `VITE_GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) |
+
+> ⚠️ **중요**: `VITE_` 접두사가 반드시 있어야 Vite 빌드 시 클라이언트에서 접근 가능합니다.
+
+### 배포 후 확인 포인트
+
+- [ ] 배포 URL로 접속 시 로그인 화면이 표시되는가
+- [ ] `/login` URL 직접 접속 시 404가 아닌 로그인 화면이 표시되는가
+- [ ] `/main` URL 직접 접속 시 로그인 화면으로 리다이렉트 되는가
+- [ ] 로그인 후 칸반 보드가 정상 로드되는가 (Supabase 연결 확인)
+- [ ] AI Weekly Report 탭에서 리포트 생성이 되는가 (Gemini API 연결 확인)
+- [ ] 브라우저 새로고침 시 화면이 유지되는가
+
+---
 
 ## Supabase 테이블 구조
 
 ### SCRUMBOARD_USER (사용자 테이블)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
-| USER_ID | TEXT | 사용자 ID (PK) |
-| USER_PW | TEXT | 비밀번호 |
+| ID | TEXT | 사용자 ID (PK) |
+| USER_PWD | TEXT | 비밀번호 |
 | NAME | TEXT | 이름 |
 | DEPT_CD | TEXT | 부서 코드 |
+
+### DEPARTMENT (부서 테이블)
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| DEPT_CD | TEXT | 부서 코드 (PK) |
 | DEPT_NM | TEXT | 부서명 |
 
 ### TASK_BOARD (업무 보드 테이블)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | BOARD_ID | TEXT | 업무 ID (PK) |
-| STATUS | TEXT | 상태 (TODO/IN_PROGRESS/DONE 등) |
+| STATUS | TEXT | 상태 (TODO / IN_PROGRESS / DONE 등) |
 | TITLE | TEXT | 제목 |
 | CONTENT | TEXT | 작업 내용 |
 | ISSUE | TEXT | 이슈 사항 |
@@ -96,11 +151,13 @@ npm run build
 | REG_USER_ID | TEXT | 등록자 ID |
 | REG_DT | TIMESTAMP | 등록일시 |
 
+---
+
 ## 보안 주의사항
 
 - `.env` 파일은 절대 GitHub에 올리지 마세요 (`.gitignore`에 포함됨)
 - API 키가 노출된 경우 즉시 재발급하세요
-  - Supabase: 대시보드 > Settings > API > Reveal anon key > Rotate
+  - Supabase: 대시보드 > Settings > API > Rotate
   - Gemini: [Google AI Studio](https://aistudio.google.com/apikey) > Delete & Create new
 
 ## 라이선스
