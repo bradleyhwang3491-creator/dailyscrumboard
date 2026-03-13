@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import LoginForm from "../components/LoginForm";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 /**
  * LoginPage
@@ -8,8 +9,9 @@ import LoginForm from "../components/LoginForm";
  * 로그인 성공 시 AuthContext의 user 상태를 즉시 갱신하고 /main으로 이동합니다.
  */
 function LoginPage() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
   const { setUser } = useAuth();
+  const isMobile  = useBreakpoint(768);
 
   function handleLoginSuccess(sessionUser) {
     setUser(sessionUser);
@@ -18,7 +20,7 @@ function LoginPage() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
+      <div style={isMobile ? styles.cardMobile : styles.card}>
         <LoginForm onLoginSuccess={handleLoginSuccess} />
       </div>
     </div>
@@ -32,7 +34,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "24px",
+    padding: "24px 16px",
   },
   card: {
     width: "100%",
@@ -41,6 +43,14 @@ const styles = {
     borderRadius: "10px",
     boxShadow: "0 2px 16px rgba(0, 0, 0, 0.08)",
     padding: "44px 40px 40px",
+  },
+  cardMobile: {
+    width: "100%",
+    maxWidth: "400px",
+    backgroundColor: "#FFFFFF",
+    borderRadius: "10px",
+    boxShadow: "0 2px 16px rgba(0, 0, 0, 0.08)",
+    padding: "36px 24px 32px",
   },
 };
 

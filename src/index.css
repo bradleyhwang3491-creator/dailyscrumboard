@@ -25,3 +25,26 @@ input:focus {
 button:hover {
   opacity: 0.88;
 }
+
+/* 모바일 최적화 */
+html {
+  /* iOS Safari 주소창 높이 보정 */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* 모바일 가로 스크롤 방지 */
+  overflow-x: hidden;
+}
+
+/* 모바일에서 탭 선택 하이라이트 제거 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 입력 필드: 모바일 iOS 자동 확대 방지 (16px 이상 유지) */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

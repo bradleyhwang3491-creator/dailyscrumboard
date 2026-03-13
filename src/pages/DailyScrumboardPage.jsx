@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 /* ─────────────────────────── 상수 ─────────────────────────── */
 const COLUMNS = [
@@ -39,6 +40,7 @@ function fromDate8(s) {
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 function DailyScrumboardPage() {
   const { user } = useAuth();
+  const isMobile = useBreakpoint(768);
 
   const [tasks,     setTasks]     = useState([]);
   const [tm1,       setTm1]       = useState([]);
@@ -49,6 +51,9 @@ function DailyScrumboardPage() {
   // 조회 조건
   const [searchType1,  setSearchType1]  = useState("");
   const [searchUserId, setSearchUserId] = useState("");
+
+  // 모바일 컬럼 탭
+  const [activeMobileCol, setActiveMobileCol] = useState("TODO");
 
   // 드래그 상태
   const [dragCardId,  setDragCardId]  = useState(null);
@@ -263,71 +268,118 @@ function DailyScrumboardPage() {
       </div>
 
       {/* ── 조회 조건 ── */}
-      <div style={s.searchBar}>
-        <div style={s.searchField}>
+      <div style={isMobile ? s.searchBarMobile : s.searchBar}>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={s.searchLabel}>업무구분1</label>
-          <select style={s.searchSelect} value={searchType1} onChange={(e) => setSearchType1(e.target.value)}>
+          <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchType1} onChange={(e) => setSearchType1(e.target.value)}>
             <option value="">전체</option>
             {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
           </select>
         </div>
-        <div style={s.searchField}>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={s.searchLabel}>등록자</label>
-          <select style={s.searchSelect} value={searchUserId} onChange={(e) => setSearchUserId(e.target.value)}>
+          <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchUserId} onChange={(e) => setSearchUserId(e.target.value)}>
             <option value="">전체</option>
             {deptUsers.map((u) => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
           </select>
         </div>
-        <button style={s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); }}>초기화</button>
+        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); }}>초기화</button>
       </div>
 
       {/* ── 칸반 보드 ── */}
-      <div style={s.boardWrap}>
-        <div style={s.board}>
-          {COLUMNS.map((col) => {
-            const colTasks = filteredTasks.filter((t) => t.status === col.id);
-            const isOver   = dragOverCol === col.id;
-            return (
-              <div key={col.id} style={s.column}>
-                <div style={{ ...s.colHeader, backgroundColor: col.light }}>
-                  <span style={{ ...s.colLabel, color: col.color, borderColor: col.color }}>{col.label}</span>
-                  <span style={{ ...s.colCount, backgroundColor: col.color }}>{colTasks.length}</span>
-                </div>
-                <div
+      {isMobile ? (
+        /* 모바일: 컬럼 탭 + 단일 컬럼 */
+        <div>
+          {/* 컬럼 탭 */}
+          <div style={s.mobileColTabs}>
+            {COLUMNS.map((col) => {
+              const count = filteredTasks.filter((t) => t.status === col.id).length;
+              const isActive = activeMobileCol === col.id;
+              return (
+                <button
+                  key={col.id}
                   style={{
-                    ...s.cardList,
-                    ...(isOver ? s.cardListOver : {}),
+                    ...s.mobileColTab,
+                    ...(isActive ? { ...s.mobileColTabActive, borderBottomColor: col.color, color: col.color } : {}),
                   }}
-                  onDragOver={(e) => handleDragOver(e, col.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, col.id)}
+                  onClick={() => setActiveMobileCol(col.id)}
                 >
-                  {colTasks.length === 0 ? (
-                    <p style={{ ...s.emptyMsg, ...(isOver ? s.emptyMsgOver : {}) }}>
-                      {isOver ? "여기에 놓기" : "항목 없음"}
-                    </p>
-                  ) : (
-                    colTasks.map((task) => (
-                      <TaskCard
-                        key={task.id} task={task} tm1={tm1} tm2={tm2} userMap={userMap}
-                        onClick={openDetail}
-                        onResolveIssue={handleResolveIssue}
-                        isDragging={dragCardId === task.id}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                      />
-                    ))
-                  )}
-                  {/* 카드가 있고 드롭존 활성 시 하단 표시 */}
-                  {isOver && colTasks.length > 0 && (
-                    <div style={s.dropIndicator}>여기에 놓기</div>
-                  )}
-                </div>
+                  {col.label}
+                  <span style={{ ...s.mobileColTabBadge, backgroundColor: isActive ? col.color : "#CBD5E1" }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {/* 선택된 컬럼 카드 목록 */}
+          {COLUMNS.filter((col) => col.id === activeMobileCol).map((col) => {
+            const colTasks = filteredTasks.filter((t) => t.status === col.id);
+            return (
+              <div key={col.id} style={s.mobileCardList}>
+                {colTasks.length === 0 ? (
+                  <p style={s.emptyMsg}>항목 없음</p>
+                ) : (
+                  colTasks.map((task) => (
+                    <TaskCard
+                      key={task.id} task={task} tm1={tm1} tm2={tm2} userMap={userMap}
+                      onClick={openDetail}
+                      onResolveIssue={handleResolveIssue}
+                      isDragging={false}
+                      onDragStart={() => {}}
+                      onDragEnd={() => {}}
+                    />
+                  ))
+                )}
               </div>
             );
           })}
         </div>
-      </div>
+      ) : (
+        /* 데스크탑: 4컬럼 칸반 보드 */
+        <div style={s.boardWrap}>
+          <div style={s.board}>
+            {COLUMNS.map((col) => {
+              const colTasks = filteredTasks.filter((t) => t.status === col.id);
+              const isOver   = dragOverCol === col.id;
+              return (
+                <div key={col.id} style={s.column}>
+                  <div style={{ ...s.colHeader, backgroundColor: col.light }}>
+                    <span style={{ ...s.colLabel, color: col.color, borderColor: col.color }}>{col.label}</span>
+                    <span style={{ ...s.colCount, backgroundColor: col.color }}>{colTasks.length}</span>
+                  </div>
+                  <div
+                    style={{ ...s.cardList, ...(isOver ? s.cardListOver : {}) }}
+                    onDragOver={(e) => handleDragOver(e, col.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, col.id)}
+                  >
+                    {colTasks.length === 0 ? (
+                      <p style={{ ...s.emptyMsg, ...(isOver ? s.emptyMsgOver : {}) }}>
+                        {isOver ? "여기에 놓기" : "항목 없음"}
+                      </p>
+                    ) : (
+                      colTasks.map((task) => (
+                        <TaskCard
+                          key={task.id} task={task} tm1={tm1} tm2={tm2} userMap={userMap}
+                          onClick={openDetail}
+                          onResolveIssue={handleResolveIssue}
+                          isDragging={dragCardId === task.id}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                        />
+                      ))
+                    )}
+                    {isOver && colTasks.length > 0 && (
+                      <div style={s.dropIndicator}>여기에 놓기</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 등록 모달 */}
       {isRegOpen && (
@@ -432,11 +484,18 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel = "취소",
                      onResolveIssue }) {
   const [textCopied, setTextCopied] = useState(false);
+  const isMobile = useBreakpoint(768);
 
   function f(field, value) { setForm((p) => ({ ...p, [field]: value })); }
   const inp = (err) => ({ ...ms.input, ...(err ? ms.inputErr : {}), ...(readOnly ? ms.inputRO : {}) });
   const hasIssue     = !!form.issue?.trim();
   const issueResolved = form.issueCompleteYn === "Y";
+
+  // 모바일 반응형 스타일 오버라이드
+  const modalStyle  = isMobile ? { ...ms.modal,  ...ms.modalMobile  } : ms.modal;
+  const overlayStyle = isMobile ? { ...ms.overlay, ...ms.overlayMobile } : ms.overlay;
+  const twoColStyle  = isMobile ? ms.oneCol : ms.twoCol;
+  const halfRowStyle = isMobile ? ms.oneCol : ms.halfRow;
 
   /* ── 텍스트 복사 ── */
   async function handleCopyText() {
@@ -485,8 +544,8 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
   }
 
   return (
-    <div style={ms.overlay} onClick={readOnly ? onClose : undefined}>
-      <div style={ms.modal} onClick={(e) => e.stopPropagation()}>
+    <div style={overlayStyle} onClick={readOnly ? onClose : undefined}>
+      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={ms.header}>
           <span style={ms.title}>{title}</span>
           <button style={ms.closeX} onClick={onClose}>✕</button>
@@ -501,7 +560,7 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
             {errors.title && <p style={ms.err}>{errors.title}</p>}
           </div>
           {/* 등록일자 | 상태 */}
-          <div style={ms.twoCol}>
+          <div style={twoColStyle}>
             <div style={ms.fieldWrap}>
               <label style={ms.label}>등록일자</label>
               <input style={inp()} type="date" value={form.regDate} readOnly={readOnly}
@@ -519,7 +578,7 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
             </div>
           </div>
           {/* 업무구분1 | 업무구분2 */}
-          <div style={ms.twoCol}>
+          <div style={twoColStyle}>
             <div style={ms.fieldWrap}>
               <label style={ms.label}>업무구분1</label>
               <select style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
@@ -540,7 +599,7 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
             </div>
           </div>
           {/* 중요도 (절반) */}
-          <div style={ms.halfRow}>
+          <div style={halfRowStyle}>
             <div style={ms.fieldWrap}>
               <label style={ms.label}>중요도</label>
               <select style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
@@ -644,23 +703,66 @@ const s = {
     color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none",
     borderRadius: "5px", padding: "8px 16px", cursor: "pointer",
   },
-  // 조회 조건
+  // 조회 조건 (데스크탑)
   searchBar: {
     display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap",
     backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px",
     padding: "14px 18px", marginBottom: "16px",
   },
+  // 조회 조건 (모바일: 세로 스택)
+  searchBarMobile: {
+    display: "flex", flexDirection: "column", gap: "10px",
+    backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px",
+    padding: "14px 16px", marginBottom: "14px",
+  },
   searchField: { display: "flex", alignItems: "center", gap: "8px" },
+  searchFieldMobile: { display: "flex", flexDirection: "column", gap: "5px" },
   searchLabel: { fontSize: "13px", fontWeight: "500", color: "#5A5A5A", whiteSpace: "nowrap" },
   searchSelect: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F",
     border: "1px solid #D9D9D9", borderRadius: "5px",
     padding: "6px 10px", outline: "none", minWidth: "140px", cursor: "pointer",
   },
+  searchSelectFull: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F",
+    border: "1px solid #D9D9D9", borderRadius: "5px",
+    padding: "8px 10px", outline: "none", width: "100%", cursor: "pointer",
+  },
   resetBtn: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A",
     backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9",
     borderRadius: "5px", padding: "6px 14px", cursor: "pointer",
+  },
+  resetBtnFull: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A",
+    backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9",
+    borderRadius: "5px", padding: "9px 14px", cursor: "pointer", width: "100%",
+  },
+  // 모바일 컬럼 탭
+  mobileColTabs: {
+    display: "flex", borderBottom: "1px solid #E2E8F0",
+    backgroundColor: "#FFFFFF", borderRadius: "8px 8px 0 0",
+    overflow: "hidden", marginBottom: "0",
+  },
+  mobileColTab: {
+    flex: 1, fontFamily: "'Pretendard', sans-serif", fontSize: "11px", fontWeight: "600",
+    color: "#94A3B8", backgroundColor: "transparent", border: "none",
+    borderBottom: "2px solid transparent", padding: "10px 4px",
+    cursor: "pointer", display: "flex", flexDirection: "column",
+    alignItems: "center", gap: "4px", letterSpacing: "0.04em",
+  },
+  mobileColTabActive: {
+    color: "#1E293B",
+  },
+  mobileColTabBadge: {
+    fontSize: "10px", fontWeight: "700", color: "#FFFFFF",
+    borderRadius: "10px", padding: "1px 6px", minWidth: "18px", textAlign: "center",
+  },
+  mobileCardList: {
+    backgroundColor: "#F8FAFC", borderRadius: "0 0 8px 8px",
+    border: "1px solid #E2E8F0", borderTop: "none",
+    padding: "10px", display: "flex", flexDirection: "column", gap: "10px",
+    minHeight: "200px",
   },
   // 보드
   boardWrap: { overflowX: "auto" },
@@ -711,7 +813,9 @@ const s = {
 
 const ms = {
   overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  overlayMobile: { alignItems: "flex-end" },
   modal: { backgroundColor: "#FFFFFF", borderRadius: "10px", width: "660px", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,0.15)" },
+  modalMobile: { width: "100%", maxWidth: "100%", maxHeight: "92vh", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 14px", borderBottom: "1px solid #E8E8E8", flexShrink: 0 },
   title:  { fontSize: "16px", fontWeight: "600", color: "#1E293B" },
   closeX: { background: "none", border: "none", fontSize: "16px", color: "#94A3B8", cursor: "pointer" },
@@ -731,6 +835,7 @@ const ms = {
   fullRow:   { display: "flex", flexDirection: "column", gap: "5px" },
   halfRow:   { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
   twoCol:    { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
+  oneCol:    { display: "grid", gridTemplateColumns: "1fr", gap: "14px" },
   fieldWrap: { display: "flex", flexDirection: "column", gap: "5px" },
   label: { fontSize: "12px", fontWeight: "500", color: "#64748B" },
   req:   { color: "#DC2626" },

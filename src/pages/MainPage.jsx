@@ -2,24 +2,28 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { logout } from "../utils/auth";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 import UserManagementPage from "./UserManagementPage";
 import DailyScrumboardPage from "./DailyScrumboardPage";
 import AIWeeklyReportPage from "./AIWeeklyReportPage";
 
 const MENU_ITEMS = [
-  { id: "dashboard", label: "Dashboard",       emoji: "◈" },
-  { id: "scrumboard", label: "Daily Scrumboard", emoji: "▦" },
-  { id: "ai-report", label: "AI Weekly Report", emoji: "◉" },
-  { id: "user-mgmt", label: "사용자 정보 관리",  emoji: "◎" },
+  { id: "dashboard",  label: "Dashboard",        emoji: "◈" },
+  { id: "scrumboard", label: "Daily Scrumboard",  emoji: "▦" },
+  { id: "ai-report",  label: "AI Weekly Report",  emoji: "◉" },
+  { id: "user-mgmt",  label: "사용자 정보 관리",   emoji: "◎" },
 ];
 
 function MainPage() {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
-  const [activeMenu, setActiveMenu] = useState(null);
+  const isMobile = useBreakpoint(768);
+
+  const [activeMenu,  setActiveMenu]  = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const deptNm = user?.deptNm ?? "";
-  const name = user?.name ?? "";
+  const name   = user?.name   ?? "";
 
   function handleLogout() {
     logout();
@@ -27,13 +31,80 @@ function MainPage() {
     navigate("/login", { replace: true });
   }
 
+  function handleMenuClick(id) {
+    setActiveMenu(id);
+    setSidebarOpen(false);
+  }
+
+  /* 사이드바 (데스크탑: 고정 / 모바일: 슬라이드 오버레이) */
+  const sidebarEl = (
+    <nav
+      style={{
+        ...styles.sidebar,
+        ...(isMobile ? styles.sidebarMobile : {}),
+        ...(isMobile && sidebarOpen ? styles.sidebarMobileOpen : {}),
+      }}
+    >
+      {isMobile && (
+        <div style={styles.sidebarMobileHeader}>
+          <span style={styles.sidebarMobileTitle}>메뉴</span>
+          <button
+            style={styles.sidebarCloseBtn}
+            onClick={() => setSidebarOpen(false)}
+            aria-label="메뉴 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {MENU_ITEMS.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => handleMenuClick(item.id)}
+          style={{
+            ...styles.menuItem,
+            ...(activeMenu === item.id ? styles.menuItemActive : {}),
+          }}
+        >
+          {activeMenu === item.id && <span style={styles.activeBar} />}
+          <span style={styles.menuEmoji}>{item.emoji}</span>
+          {item.label}
+        </button>
+      ))}
+    </nav>
+  );
+
   return (
     <div style={styles.page}>
+      {/* 모바일 오버레이 (사이드바 뒤 어둡게) */}
+      {isMobile && sidebarOpen && (
+        <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* 상단 헤더 */}
       <header style={styles.header}>
-        <span style={styles.serviceName}>SCRUM MEETING, WORK TOGETHER</span>
+        <div style={styles.headerLeft}>
+          {isMobile && (
+            <button
+              style={styles.hamburgerBtn}
+              onClick={() => setSidebarOpen(true)}
+              aria-label="메뉴 열기"
+            >
+              <span style={styles.hamburgerLine} />
+              <span style={styles.hamburgerLine} />
+              <span style={styles.hamburgerLine} />
+            </button>
+          )}
+          <span style={isMobile ? styles.serviceNameMobile : styles.serviceName}>
+            {isMobile ? "SCRUM BOARD" : "SCRUM MEETING, WORK TOGETHER"}
+          </span>
+        </div>
+
         <div style={styles.headerRight}>
-          <span style={styles.userLabel}>{deptNm}_{name}</span>
+          {!isMobile && (
+            <span style={styles.userLabel}>{deptNm}_{name}</span>
+          )}
           <button onClick={handleLogout} style={styles.logoutButton}>
             로그아웃
           </button>
@@ -42,28 +113,19 @@ function MainPage() {
 
       {/* 바디: 사이드바 + 콘텐츠 */}
       <div style={styles.body}>
+        {sidebarEl}
 
-        {/* 좌측 사이드바 */}
-        <nav style={styles.sidebar}>
-          {MENU_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveMenu(item.id)}
-              style={{
-                ...styles.menuItem,
-                ...(activeMenu === item.id ? styles.menuItemActive : {}),
-              }}
-            >
-              {activeMenu === item.id && <span style={styles.activeBar} />}
-              <span style={styles.menuEmoji}>{item.emoji}</span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
+        <main style={isMobile ? styles.contentMobile : styles.content}>
+          {/* 모바일: 현재 메뉴명 + 사용자 */}
+          {isMobile && (
+            <div style={styles.mobileTopBar}>
+              <span style={styles.mobileMenuLabel}>
+                {MENU_ITEMS.find((m) => m.id === activeMenu)?.label ?? ""}
+              </span>
+              <span style={styles.mobileUserLabel}>{deptNm}_{name}</span>
+            </div>
+          )}
 
-        {/* 우측 콘텐츠 */}
-        <main style={styles.content}>
-          {/* 메뉴 선택 시 콘텐츠 */}
           {activeMenu === "user-mgmt" ? (
             <UserManagementPage />
           ) : activeMenu === "scrumboard" ? (
@@ -75,7 +137,9 @@ function MainPage() {
               {activeMenu ? (
                 <p style={styles.comingSoon}>아직 개발 준비중입니다.</p>
               ) : (
-                <p style={styles.placeholder}>좌측 메뉴를 선택해주세요.</p>
+                <p style={styles.placeholder}>
+                  {isMobile ? "☰ 상단 버튼으로 메뉴를 선택해주세요." : "좌측 메뉴를 선택해주세요."}
+                </p>
               )}
             </div>
           )}
@@ -93,25 +157,39 @@ const styles = {
     display: "flex",
     flexDirection: "column",
   },
+
+  /* ── 헤더 ── */
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#FFFFFF",
     borderBottom: "1px solid #E8E8E8",
-    padding: "0 32px",
-    height: "60px",
+    padding: "0 16px",
+    height: "56px",
     flexShrink: 0,
+    position: "relative",
+    zIndex: 200,
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
   },
   serviceName: {
     fontSize: "15px",
     fontWeight: "600",
     color: "#2F2F2F",
   },
+  serviceNameMobile: {
+    fontSize: "14px",
+    fontWeight: "700",
+    color: "#2F2F2F",
+  },
   headerRight: {
     display: "flex",
     alignItems: "center",
-    gap: "16px",
+    gap: "12px",
   },
   userLabel: {
     fontSize: "13px",
@@ -126,13 +204,48 @@ const styles = {
     backgroundColor: "transparent",
     border: "1px solid #D9D9D9",
     borderRadius: "5px",
-    padding: "6px 14px",
+    padding: "6px 12px",
     cursor: "pointer",
   },
+
+  /* ── 햄버거 버튼 ── */
+  hamburgerBtn: {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    gap: "5px",
+    background: "none",
+    border: "none",
+    padding: "4px",
+    cursor: "pointer",
+    width: "32px",
+    height: "32px",
+    flexShrink: 0,
+  },
+  hamburgerLine: {
+    display: "block",
+    width: "20px",
+    height: "2px",
+    backgroundColor: "#2F2F2F",
+    borderRadius: "2px",
+  },
+
+  /* ── 바디 ── */
   body: {
     display: "flex",
     flex: 1,
+    overflow: "hidden",
   },
+
+  /* ── 오버레이 ── */
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    zIndex: 299,
+  },
+
+  /* ── 사이드바 (데스크탑) ── */
   sidebar: {
     width: "220px",
     flexShrink: 0,
@@ -143,6 +256,48 @@ const styles = {
     flexDirection: "column",
     gap: "2px",
   },
+
+  /* ── 사이드바 (모바일 슬라이드) ── */
+  sidebarMobile: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: "260px",
+    zIndex: 300,
+    transform: "translateX(-100%)",
+    transition: "transform 0.25s ease",
+    padding: 0,
+    boxShadow: "4px 0 20px rgba(0,0,0,0.12)",
+  },
+  sidebarMobileOpen: {
+    transform: "translateX(0)",
+  },
+  sidebarMobileHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "0 20px",
+    height: "56px",
+    borderBottom: "1px solid #E8E8E8",
+    flexShrink: 0,
+  },
+  sidebarMobileTitle: {
+    fontSize: "15px",
+    fontWeight: "700",
+    color: "#2F2F2F",
+  },
+  sidebarCloseBtn: {
+    background: "none",
+    border: "none",
+    fontSize: "18px",
+    color: "#94A3B8",
+    cursor: "pointer",
+    padding: "4px",
+    lineHeight: 1,
+  },
+
+  /* ── 메뉴 아이템 ── */
   menuItem: {
     position: "relative",
     fontFamily: "'Pretendard', sans-serif",
@@ -152,7 +307,7 @@ const styles = {
     backgroundColor: "transparent",
     border: "none",
     textAlign: "left",
-    padding: "11px 24px",
+    padding: "13px 24px",
     cursor: "pointer",
     transition: "background-color 0.12s, color 0.12s",
     width: "100%",
@@ -178,28 +333,39 @@ const styles = {
     backgroundColor: "#3A3A3A",
     borderRadius: "0 2px 2px 0",
   },
+
+  /* ── 콘텐츠 ── */
   content: {
     flex: 1,
     padding: "32px",
     minWidth: 0,
+    overflowY: "auto",
   },
-  welcomeCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: "8px",
-    border: "1px solid #E8E8E8",
-    padding: "20px 24px",
-    marginBottom: "20px",
+  contentMobile: {
+    flex: 1,
+    padding: "16px",
+    minWidth: 0,
+    overflowY: "auto",
   },
-  welcomeText: {
-    fontSize: "18px",
-    fontWeight: "400",
-    color: "#2F2F2F",
-    margin: 0,
+
+  /* ── 모바일 상단 바 ── */
+  mobileTopBar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "12px",
   },
-  userName: {
+  mobileMenuLabel: {
+    fontSize: "15px",
     fontWeight: "700",
     color: "#2F2F2F",
   },
+  mobileUserLabel: {
+    fontSize: "12px",
+    color: "#94A3B8",
+  },
+
+  /* ── 빈 화면 ── */
   contentArea: {
     backgroundColor: "#FFFFFF",
     borderRadius: "8px",

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 
 /* ────────────────────── Gemini 설정 ────────────────────── */
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -51,7 +52,8 @@ async function callGemini(prompt) {
 
 /* ════════════════════ 메인 컴포넌트 ════════════════════ */
 function AIWeeklyReportPage() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
+  const isMobile  = useBreakpoint(768);
 
   const today   = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -206,25 +208,25 @@ function AIWeeklyReportPage() {
         <h2 style={s.pageTitle}>AI Weekly Report</h2>
       </div>
 
-      {/* ── 조회 조건 + 생성 버튼 (한 줄) ── */}
+      {/* ── 조회 조건 + 생성 버튼 ── */}
       <div style={s.filterCard}>
-        <div style={s.filterRow}>
+        <div style={isMobile ? s.filterRowMobile : s.filterRow}>
           {/* 조회 기간 */}
-          <div style={s.filterField}>
+          <div style={isMobile ? s.filterFieldFull : s.filterField}>
             <label style={s.filterLabel}>조회 기간</label>
             <div style={s.dateRange}>
-              <input type="date" style={s.dateInput} value={fromDate}
+              <input type="date" style={isMobile ? s.dateInputFull : s.dateInput} value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)} />
               <span style={s.rangeSep}>~</span>
-              <input type="date" style={s.dateInput} value={toDate}
+              <input type="date" style={isMobile ? s.dateInputFull : s.dateInput} value={toDate}
                 onChange={(e) => setToDate(e.target.value)} />
             </div>
           </div>
 
           {/* 업무구분 */}
-          <div style={s.filterField}>
+          <div style={isMobile ? s.filterFieldFull : s.filterField}>
             <label style={s.filterLabel}>업무구분</label>
-            <select style={s.filterSelect} value={taskType1Cd}
+            <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={taskType1Cd}
               onChange={(e) => setTaskType1Cd(e.target.value)}>
               <option value="">전체</option>
               {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
@@ -232,17 +234,17 @@ function AIWeeklyReportPage() {
           </div>
 
           {/* 등록자 */}
-          <div style={s.filterField}>
+          <div style={isMobile ? s.filterFieldFull : s.filterField}>
             <label style={s.filterLabel}>등록자</label>
-            <select style={s.filterSelect} value={searchUserId}
+            <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={searchUserId}
               onChange={(e) => setSearchUserId(e.target.value)}>
               <option value="">전체</option>
               {deptUsers.map((u) => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
             </select>
           </div>
 
-          {/* 생성 버튼 — 같은 라인 하단 정렬 */}
-          <div style={s.btnField}>
+          {/* 생성 버튼 */}
+          <div style={isMobile ? s.btnFieldFull : s.btnField}>
             <button style={isLoading ? s.genBtnDisabled : s.genBtn}
               onClick={handleGenerate} disabled={isLoading}>
               {isLoading ? "⏳  생성 중..." : "✨  REPORT 생성"}
@@ -262,7 +264,9 @@ function AIWeeklyReportPage() {
             <span style={{ ...s.dot, animationDelay: "0.2s" }} />
             <span style={{ ...s.dot, animationDelay: "0.4s" }} />
           </div>
-          <p style={s.loadingText}>AI가 일반 REPORT와 보고서를 동시에 작성하고 있습니다...</p>
+          <p style={s.loadingText}>
+            {isMobile ? "AI가 REPORT를 작성하고 있습니다..." : "AI가 일반 REPORT와 보고서를 동시에 작성하고 있습니다..."}
+          </p>
         </div>
       )}
 
@@ -270,20 +274,20 @@ function AIWeeklyReportPage() {
       {hasResult && !isLoading && (
         <div style={s.resultCard}>
           {/* 탭 헤더 */}
-          <div style={s.tabBar}>
+          <div style={isMobile ? s.tabBarMobile : s.tabBar}>
             <div style={s.tabs}>
               <button
-                style={{ ...s.tab, ...(activeTab === "normal" ? s.tabActive : s.tabInactive) }}
+                style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "normal" ? s.tabActive : s.tabInactive) }}
                 onClick={() => setActiveTab("normal")}
               >
-                📊 일반 REPORT
+                {isMobile ? "📊 일반" : "📊 일반 REPORT"}
                 {reports.normal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "normal" ? "#3A3A3A" : "#94A3B8" }} />}
               </button>
               <button
-                style={{ ...s.tab, ...(activeTab === "formal" ? s.tabActive : s.tabInactive) }}
+                style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "formal" ? s.tabActive : s.tabInactive) }}
                 onClick={() => setActiveTab("formal")}
               >
-                📋 보고서 작성 REPORT
+                {isMobile ? "📋 보고서" : "📋 보고서 작성 REPORT"}
                 {reports.formal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "formal" ? "#3A3A3A" : "#94A3B8" }} />}
               </button>
             </div>
@@ -292,12 +296,12 @@ function AIWeeklyReportPage() {
               onClick={() => handleCopy(activeTab)}
               disabled={!reports[activeTab]}
             >
-              {copiedTab === activeTab ? "✅  복사됨!" : "📋  복사하기"}
+              {copiedTab === activeTab ? "✅ 복사됨!" : "📋 복사"}
             </button>
           </div>
 
           {/* 탭 콘텐츠 */}
-          <div style={s.resultBody}>
+          <div style={isMobile ? s.resultBodyMobile : s.resultBody}>
             {reports[activeTab]
               ? reports[activeTab].split("\n").map((line, i) => {
                   const t = line.trim();
@@ -349,31 +353,47 @@ const s = {
   filterRow: {
     display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end",
   },
-  filterField: { display: "flex", flexDirection: "column", gap: "6px" },
+  // 모바일: 세로 스택
+  filterRowMobile: {
+    display: "flex", flexDirection: "column", gap: "12px",
+  },
+  filterField:     { display: "flex", flexDirection: "column", gap: "6px" },
+  filterFieldFull: { display: "flex", flexDirection: "column", gap: "6px", width: "100%" },
   filterLabel: { fontSize: "12px", fontWeight: "500", color: "#64748B" },
   dateRange:   { display: "flex", alignItems: "center", gap: "8px" },
   dateInput: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B",
     border: "1px solid #D9D9D9", borderRadius: "5px", padding: "7px 10px", outline: "none",
   },
-  rangeSep:    { fontSize: "13px", color: "#94A3B8", fontWeight: "600" },
+  dateInputFull: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B",
+    border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 10px", outline: "none",
+    flex: 1, minWidth: 0,
+  },
+  rangeSep:    { fontSize: "13px", color: "#94A3B8", fontWeight: "600", flexShrink: 0 },
   filterSelect: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F",
     border: "1px solid #D9D9D9", borderRadius: "5px",
     padding: "7px 10px", outline: "none", minWidth: "140px", cursor: "pointer",
   },
+  filterSelectFull: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F",
+    border: "1px solid #D9D9D9", borderRadius: "5px",
+    padding: "8px 10px", outline: "none", width: "100%", cursor: "pointer",
+  },
 
-  /* 생성 버튼 필드 — 다른 필드들과 하단 정렬 */
-  btnField: { display: "flex", flexDirection: "column", justifyContent: "flex-end" },
+  /* 생성 버튼 필드 */
+  btnField:     { display: "flex", flexDirection: "column", justifyContent: "flex-end" },
+  btnFieldFull: { display: "flex", flexDirection: "column", width: "100%" },
   genBtn: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "14px", fontWeight: "600",
     color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none",
-    borderRadius: "7px", padding: "8px 24px", cursor: "pointer", whiteSpace: "nowrap",
+    borderRadius: "7px", padding: "10px 24px", cursor: "pointer", whiteSpace: "nowrap",
   },
   genBtnDisabled: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "14px", fontWeight: "600",
     color: "#FFFFFF", backgroundColor: "#94A3B8", border: "none",
-    borderRadius: "7px", padding: "8px 24px", cursor: "not-allowed", whiteSpace: "nowrap",
+    borderRadius: "7px", padding: "10px 24px", cursor: "not-allowed", whiteSpace: "nowrap",
   },
 
   /* 오류 */
@@ -408,12 +428,20 @@ const s = {
     borderBottom: "1px solid #E8E8E8", backgroundColor: "#F8FAFC",
     padding: "0 20px",
   },
+  tabBarMobile: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    borderBottom: "1px solid #E8E8E8", backgroundColor: "#F8FAFC",
+    padding: "0 12px",
+  },
   tabs: { display: "flex" },
   tab: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
     border: "none", backgroundColor: "transparent", cursor: "pointer",
     padding: "14px 18px", display: "flex", alignItems: "center", gap: "6px",
     borderBottom: "2px solid transparent", marginBottom: "-1px",
+  },
+  tabMobile: {
+    fontSize: "12px", padding: "12px 10px",
   },
   tabActive: {
     color: "#1E293B", fontWeight: "700",
@@ -437,7 +465,8 @@ const s = {
     color: "#16A34A", backgroundColor: "#F0FDF4", border: "1px solid #86EFAC",
     borderRadius: "5px", padding: "6px 14px", cursor: "pointer",
   },
-  resultBody:   { padding: "20px 28px", maxHeight: "640px", overflowY: "auto" },
+  resultBody:       { padding: "20px 28px", maxHeight: "640px", overflowY: "auto" },
+  resultBodyMobile: { padding: "16px", maxHeight: "60vh", overflowY: "auto" },
   emptyTabMsg:  { fontSize: "13px", color: "#CBD5E1", textAlign: "center", padding: "40px 0" },
 
   /* 리포트 텍스트 */
