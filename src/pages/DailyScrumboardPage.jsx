@@ -12,9 +12,10 @@ const COLUMNS = [
 ];
 
 const PRIORITY_STYLES = {
-  일반:  { cardBg: "#FFFFFF", cardBorder: "#E2E8F0", txt: "#64748B", bg: "#F1F5F9" },
-  긴급:  { cardBg: "#FFFDF0", cardBorder: "#FCD34D", txt: "#B45309", bg: "#FEF3C7" },
-  초긴급: { cardBg: "#FFF5F5", cardBorder: "#FCA5A5", txt: "#DC2626", bg: "#FEE2E2" },
+  상:   { cardBg: "#FFFBF5", cardBorder: "#FDBA74", txt: "#C2410C", bg: "#FFEDD5" },
+  중:   { cardBg: "#F5FAFF", cardBorder: "#93C5FD", txt: "#0369A1", bg: "#E0F2FE" },
+  하:   { cardBg: "#FFFFFF", cardBorder: "#E2E8F0", txt: "#64748B", bg: "#F1F5F9" },
+  긴급: { cardBg: "#FFF5F5", cardBorder: "#FCA5A5", txt: "#DC2626", bg: "#FEE2E2" },
 };
 
 const INIT_FORM = {
@@ -28,7 +29,7 @@ const INIT_FORM = {
   issueCompleteYn: "N",
   plannedEnd: "", actualEnd: "",
   status: "TODO",
-  priority: "일반",
+  priority: "하",
   relatedLink: "",
 };
 
@@ -63,6 +64,9 @@ function DailyScrumboardPage() {
   const [dragCardId,  setDragCardId]  = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
 
+  // 업무구분1 관리 모달
+  const [showTm1Modal, setShowTm1Modal] = useState(false);
+
   // 등록 모달
   const [isRegOpen,   setIsRegOpen]   = useState(false);
   const [regForm,     setRegForm]     = useState(INIT_FORM);
@@ -85,8 +89,8 @@ function DailyScrumboardPage() {
   async function fetchTaskMaster() {
     const dept = user?.deptCd;
     const mkQ = (level) => {
-      // LEVEL 1만 DEADLINE 포함 조회
-      const cols = level === "1" ? "TASK_ID, TASK_NAME, DEADLINE" : "TASK_ID, TASK_NAME";
+      // LEVEL 1만 전체 컬럼 조회 (COWORKERS, OBJECTIVE, DESC 포함)
+      const cols = level === "1" ? "TASK_ID, TASK_NAME, DEADLINE, OBJECTIVE, COWORKERS, DESC" : "TASK_ID, TASK_NAME";
       let q = supabase.from("TASK_MASTER").select(cols).eq("LEVEL", level).order("TASK_NAME");
       if (dept) q = q.eq("DEPT_CD", dept);
       return q;
@@ -94,7 +98,13 @@ function DailyScrumboardPage() {
     const [{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }] =
       await Promise.all([mkQ("1"), mkQ("2"), mkQ("3"), mkQ("4")]);
     // DEADLINE 컬럼명 대소문자 정규화 (Supabase는 소문자로 반환할 수 있음)
-    if (d1) setTm1(d1.map((r) => ({ ...r, DEADLINE: r.DEADLINE ?? r.deadline ?? null })));
+    if (d1) setTm1(d1.map((r) => ({
+      ...r,
+      DEADLINE:  r.DEADLINE  ?? r.deadline  ?? null,
+      OBJECTIVE: r.OBJECTIVE ?? r.objective ?? null,
+      COWORKERS: r.COWORKERS ?? r.coworkers ?? null,
+      DESC:      r.DESC      ?? r.desc      ?? null,
+    })));
     if (d2) setTm2(d2);
     if (d3) setTm3(d3);
     if (d4) setTm4(d4);
@@ -351,7 +361,10 @@ function DailyScrumboardPage() {
       {/* 헤더 */}
       <div style={s.topBar}>
         <h2 style={s.pageTitle}>Daily Scrumboard</h2>
-        <button style={s.registerBtn} onClick={() => setIsRegOpen(true)}>+ 등록</button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button style={s.tm1ListBtn} onClick={() => setShowTm1Modal(true)}>☰ 업무구분1 List</button>
+          <button style={s.registerBtn} onClick={() => setIsRegOpen(true)}>+ 등록</button>
+        </div>
       </div>
 
       {/* ── 조회 조건 ── */}
@@ -496,13 +509,284 @@ function DailyScrumboardPage() {
           onDeleteTaskMaster={handleDeleteTaskMaster}
           deptUsers={deptUsers} />
       )}
+
+      {/* 업무구분1 관리 모달 */}
+      {showTm1Modal && (
+        <TaskMaster1Modal
+          tm1={tm1}
+          user={user}
+          deptUsers={deptUsers}
+          onClose={() => setShowTm1Modal(false)}
+          onSaved={() => { fetchTaskMaster(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════ 업무구분1 관리 팝업 ═══════════════════════ */
+function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
+  const EMPTY = { TASK_ID: null, TASK_NAME: "", DEADLINE: "", OBJECTIVE: "", DESC: "" };
+  const [selected,     setSelected]     = useState(null);   // TASK_ID
+  const [form,         setForm]         = useState(EMPTY);
+  const [selUsers,     setSelUsers]     = useState([]);     // 선택된 담당자 [{ID,NAME}]
+  const [showUserDrop, setShowUserDrop] = useState(false);  // 담당자 드롭다운 열림
+  const [mode,         setMode]         = useState(null);   // null | "new" | "edit"
+  const [errors,       setErrors]       = useState({});
+  const [saving,       setSaving]       = useState(false);
+  const [savedMsg,     setSavedMsg]     = useState("");
+
+  function f(key, val) { setForm(prev => ({ ...prev, [key]: val })); }
+
+  /* 기존 COWORKERS 문자열 → 선택 사용자 배열로 파싱 */
+  function parseCoworkers(str) {
+    if (!str) return [];
+    const names = str.split(",").map(s => s.trim()).filter(Boolean);
+    return deptUsers.filter(u => names.includes(u.NAME));
+  }
+
+  function openNew() {
+    setForm(EMPTY); setSelUsers([]); setErrors({});
+    setMode("new"); setSelected(null); setSavedMsg(""); setShowUserDrop(false);
+  }
+  function openEdit(item) {
+    setForm({
+      TASK_ID:   item.TASK_ID,
+      TASK_NAME: item.TASK_NAME ?? "",
+      DEADLINE:  item.DEADLINE  ?? "",
+      OBJECTIVE: item.OBJECTIVE ?? "",
+      DESC:      item.DESC      ?? "",
+    });
+    setSelUsers(parseCoworkers(item.COWORKERS ?? ""));
+    setErrors({}); setMode("edit"); setSelected(item.TASK_ID);
+    setSavedMsg(""); setShowUserDrop(false);
+  }
+
+  function toggleUser(u) {
+    setSelUsers(prev =>
+      prev.some(x => x.ID === u.ID)
+        ? prev.filter(x => x.ID !== u.ID)
+        : [...prev, u]
+    );
+  }
+
+  async function handleSave() {
+    const errs = {};
+    if (!form.TASK_NAME.trim()) errs.TASK_NAME = "명칭을 입력해주세요.";
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    setSaving(true);
+    const coworkersStr = selUsers.map(u => u.NAME).join(", ");
+    try {
+      if (mode === "new") {
+        const { data: mx } = await supabase.from("TASK_MASTER")
+          .select("TASK_ID").order("TASK_ID", { ascending: false }).limit(1);
+        const nextId = mx && mx.length > 0 ? mx[0].TASK_ID + 1 : 1;
+        const { error } = await supabase.from("TASK_MASTER").insert({
+          TASK_ID:   nextId,
+          TASK_NAME: form.TASK_NAME.trim(),
+          LEVEL:     "1",
+          ID:        user?.id     ?? null,
+          DEPT_CD:   user?.deptCd ?? null,
+          DEADLINE:  form.DEADLINE  || null,
+          OBJECTIVE: form.OBJECTIVE || null,
+          COWORKERS: coworkersStr   || null,
+          DESC:      form.DESC      || null,
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("TASK_MASTER")
+          .update({
+            TASK_NAME: form.TASK_NAME.trim(),
+            DEADLINE:  form.DEADLINE  || null,
+            OBJECTIVE: form.OBJECTIVE || null,
+            COWORKERS: coworkersStr   || null,
+            DESC:      form.DESC      || null,
+          })
+          .eq("TASK_ID", form.TASK_ID);
+        if (error) throw error;
+      }
+      setSavedMsg(mode === "new" ? "✅ 등록되었습니다." : "✅ 수정되었습니다.");
+      setTimeout(() => setSavedMsg(""), 2200);
+      onSaved();
+      setMode(null); setSelected(null); setForm(EMPTY); setSelUsers([]);
+    } catch (e) {
+      alert("저장 중 오류: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={tm1s.overlay} onClick={onClose}>
+      <div style={tm1s.modal} onClick={e => e.stopPropagation()}>
+        {/* 헤더 */}
+        <div style={tm1s.header}>
+          <span style={tm1s.title}>업무구분1 관리</span>
+          <button style={tm1s.closeX} onClick={onClose}>✕</button>
+        </div>
+        <div style={tm1s.body}>
+          {/* 왼쪽: 목록 */}
+          <div style={tm1s.listPanel}>
+            <button style={tm1s.newBtn} onClick={openNew}>+ 신규 등록</button>
+            <div style={tm1s.listScroll}>
+              {tm1.length === 0 && (
+                <div style={tm1s.emptyList}>등록된 업무구분1이 없습니다.</div>
+              )}
+              {tm1.map(item => (
+                <div
+                  key={item.TASK_ID}
+                  style={{ ...tm1s.listItem, ...(selected === item.TASK_ID ? tm1s.listItemActive : {}) }}
+                  onClick={() => openEdit(item)}
+                >
+                  <div style={tm1s.listItemName}>{item.TASK_NAME}</div>
+                  {item.DEADLINE && <div style={tm1s.listItemSub}>마감 {item.DEADLINE}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 오른쪽: 폼 */}
+          <div style={tm1s.formPanel}>
+            {mode === null ? (
+              <div style={tm1s.noSelect}>
+                <div style={tm1s.noSelectIcon}>📋</div>
+                <div style={tm1s.noSelectText}>목록에서 항목을 선택하거나<br/>신규 등록 버튼을 눌러주세요.</div>
+              </div>
+            ) : (
+              <>
+                <div style={tm1s.formHeader}>
+                  {mode === "new" ? "신규 등록" : "수정"}
+                  {savedMsg && <span style={tm1s.savedMsg}>{savedMsg}</span>}
+                </div>
+                <div style={tm1s.formBody}>
+                  {/* 명칭 */}
+                  <div style={tm1s.fieldWrap}>
+                    <label style={tm1s.label}>업무구분1 명칭 <span style={tm1s.req}>*</span></label>
+                    <input
+                      style={{ ...tm1s.input, ...(errors.TASK_NAME ? tm1s.inputErr : {}) }}
+                      placeholder="업무구분1 명칭 입력"
+                      value={form.TASK_NAME}
+                      onChange={e => f("TASK_NAME", e.target.value)}
+                    />
+                    {errors.TASK_NAME && <span style={tm1s.errMsg}>{errors.TASK_NAME}</span>}
+                  </div>
+
+                  {/* 마감일 — 달력 선택 */}
+                  <div style={tm1s.fieldWrap}>
+                    <label style={tm1s.label}>마감일</label>
+                    <input
+                      type="date"
+                      style={tm1s.inputDate}
+                      value={form.DEADLINE}
+                      onChange={e => f("DEADLINE", e.target.value)}
+                    />
+                  </div>
+
+                  {/* 목적 */}
+                  <div style={tm1s.fieldWrap}>
+                    <label style={tm1s.label}>목적</label>
+                    <textarea
+                      style={tm1s.textarea}
+                      placeholder="업무 목적 입력"
+                      value={form.OBJECTIVE}
+                      onChange={e => f("OBJECTIVE", e.target.value)}
+                    />
+                  </div>
+
+                  {/* 담당자 — 멀티 드롭다운 */}
+                  <div style={tm1s.fieldWrap}>
+                    <label style={tm1s.label}>담당자</label>
+                    <div style={{ position: "relative" }}>
+                      <button
+                        type="button"
+                        style={tm1s.userDropBtn}
+                        onClick={() => setShowUserDrop(v => !v)}
+                      >
+                        <span>
+                          {selUsers.length === 0
+                            ? "담당자 선택"
+                            : `${selUsers.length}명 선택됨`}
+                        </span>
+                        <span style={{ fontSize: "10px", color: "#94A3B8" }}>{showUserDrop ? "▲" : "▼"}</span>
+                      </button>
+
+                      {showUserDrop && (
+                        <div style={tm1s.userDropList}>
+                          {deptUsers.length === 0 && (
+                            <div style={tm1s.userDropEmpty}>부서 사용자가 없습니다.</div>
+                          )}
+                          {deptUsers.map(u => {
+                            const checked = selUsers.some(x => x.ID === u.ID);
+                            return (
+                              <div
+                                key={u.ID}
+                                style={{ ...tm1s.userDropItem, ...(checked ? tm1s.userDropItemChecked : {}) }}
+                                onClick={() => toggleUser(u)}
+                              >
+                                <div style={{ ...tm1s.userDropAvatar, backgroundColor: checked ? "#1E293B" : "#E2E8F0", color: checked ? "#fff" : "#64748B" }}>
+                                  {u.NAME?.charAt(0) ?? "?"}
+                                </div>
+                                <span style={tm1s.userDropName}>{u.NAME}</span>
+                                {checked && <span style={tm1s.userDropCheck}>✓</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 선택된 담당자 칩 */}
+                    {selUsers.length > 0 && (
+                      <div style={tm1s.chipRow}>
+                        {selUsers.map(u => (
+                          <span key={u.ID} style={tm1s.chip}>
+                            {u.NAME}
+                            <button
+                              style={tm1s.chipRemove}
+                              onClick={() => toggleUser(u)}
+                            >✕</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 설명 */}
+                  <div style={tm1s.fieldWrap}>
+                    <label style={tm1s.label}>설명</label>
+                    <textarea
+                      style={tm1s.textarea}
+                      placeholder="설명 입력"
+                      value={form.DESC}
+                      onChange={e => f("DESC", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={tm1s.formFooter}>
+                  <button style={tm1s.cancelBtn} onClick={() => { setMode(null); setSelected(null); setErrors({}); setShowUserDrop(false); }}>
+                    취소
+                  </button>
+                  <button
+                    style={saving ? tm1s.saveBtnDisabled : tm1s.saveBtn}
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? "저장 중..." : "저장"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ═══════════════════════ 카드 ═══════════════════════ */
 function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
-  const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES["일반"];
+  const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES["하"];
   const tm1Item  = tm1.find((t) => String(t.TASK_ID) === String(task.taskType1Cd));
   const type1Nm  = tm1Item?.TASK_NAME ?? "";
   const type1Dl  = tm1Item?.DEADLINE ?? tm1Item?.deadline ?? "";  // 업무구분1 마감일
@@ -948,9 +1232,10 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
               <label style={ms.label}>중요도</label>
               <select style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
                 value={form.priority} disabled={readOnly} onChange={(e) => f("priority", e.target.value)}>
-                <option value="일반">일반</option>
+                <option value="상">상</option>
+                <option value="중">중</option>
+                <option value="하">하</option>
                 <option value="긴급">긴급</option>
-                <option value="초긴급">초긴급</option>
               </select>
             </div>
           </div>
@@ -1042,6 +1327,11 @@ const s = {
   wrap: { fontFamily: "'Pretendard', sans-serif" },
   topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" },
   pageTitle: { fontSize: "17px", fontWeight: "600", color: "#2F2F2F", margin: 0 },
+  tm1ListBtn: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
+    color: "#3A3A3A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9",
+    borderRadius: "5px", padding: "8px 14px", cursor: "pointer",
+  },
   registerBtn: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
     color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none",
@@ -1255,6 +1545,60 @@ const ms = {
     borderRadius: "3px", padding: "1px 5px", cursor: "pointer", flexShrink: 0,
     lineHeight: 1,
   },
+};
+
+/* ═══════════════════════ 업무구분1 모달 스타일 ═══════════════════════ */
+const tm1s = {
+  overlay:       { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.42)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100 },
+  modal:         { position: "relative", backgroundColor: "#FFFFFF", borderRadius: "10px", width: "780px", maxWidth: "96vw", height: "560px", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,0.18)" },
+  header:        { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 14px", borderBottom: "1px solid #E8E8E8", flexShrink: 0 },
+  title:         { fontSize: "16px", fontWeight: "700", color: "#1E293B" },
+  closeX:        { background: "none", border: "none", fontSize: "18px", color: "#94A3B8", cursor: "pointer" },
+  body:          { display: "flex", flex: 1, overflow: "hidden" },
+
+  /* 왼쪽 목록 패널 */
+  listPanel:     { width: "260px", minWidth: "260px", borderRight: "1px solid #E8E8E8", display: "flex", flexDirection: "column", padding: "14px 12px", gap: "10px" },
+  newBtn:        { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#1E293B", border: "none", borderRadius: "6px", padding: "9px 12px", cursor: "pointer", flexShrink: 0 },
+  listScroll:    { flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" },
+  emptyList:     { fontSize: "13px", color: "#94A3B8", padding: "24px 8px", textAlign: "center" },
+  listItem:      { padding: "10px 12px", borderRadius: "6px", cursor: "pointer", border: "1px solid transparent", transition: "background 0.1s" },
+  listItemActive:{ backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
+  listItemName:  { fontSize: "13px", fontWeight: "600", color: "#1E293B", lineHeight: 1.4 },
+  listItemSub:   { fontSize: "11px", color: "#94A3B8", marginTop: "3px" },
+
+  /* 오른쪽 폼 패널 */
+  formPanel:     { flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
+  noSelect:      { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" },
+  noSelectIcon:  { fontSize: "36px" },
+  noSelectText:  { fontSize: "13px", color: "#94A3B8", textAlign: "center", lineHeight: 1.7 },
+  formHeader:    { display: "flex", alignItems: "center", gap: "12px", fontSize: "14px", fontWeight: "700", color: "#1E293B", padding: "16px 24px 8px", flexShrink: 0 },
+  savedMsg:      { fontSize: "12px", fontWeight: "500", color: "#16A34A" },
+  formBody:      { flex: 1, overflowY: "auto", padding: "4px 24px 12px", display: "flex", flexDirection: "column", gap: "14px" },
+  formFooter:    { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px 24px 16px", borderTop: "1px solid #E8E8E8", flexShrink: 0 },
+  fieldWrap:     { display: "flex", flexDirection: "column", gap: "5px" },
+  label:         { fontSize: "12px", fontWeight: "500", color: "#64748B" },
+  req:           { color: "#DC2626" },
+  input:         { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 10px", outline: "none", width: "100%", boxSizing: "border-box" },
+  inputDate:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "7px 10px", outline: "none", width: "100%", boxSizing: "border-box", cursor: "pointer" },
+  inputErr:      { borderColor: "#DC2626" },
+  textarea:      { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 10px", outline: "none", width: "100%", boxSizing: "border-box", resize: "vertical", minHeight: "62px" },
+  errMsg:        { fontSize: "11px", color: "#DC2626" },
+  /* 담당자 멀티 드롭다운 */
+  userDropBtn:   { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 12px", cursor: "pointer", width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", boxSizing: "border-box" },
+  userDropList:  { position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 6px 20px rgba(0,0,0,0.12)", zIndex: 50, maxHeight: "180px", overflowY: "auto" },
+  userDropEmpty: { padding: "16px", textAlign: "center", fontSize: "12px", color: "#94A3B8" },
+  userDropItem:  { display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", cursor: "pointer", transition: "background 0.1s" },
+  userDropItemChecked: { backgroundColor: "#F0F9FF" },
+  userDropAvatar:{ width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: "700", flexShrink: 0 },
+  userDropName:  { fontSize: "13px", color: "#1E293B", flex: 1 },
+  userDropCheck: { fontSize: "12px", fontWeight: "700", color: "#3B82F6" },
+  /* 선택된 담당자 칩 */
+  chipRow:       { display: "flex", flexWrap: "wrap", gap: "5px", marginTop: "7px" },
+  chip:          { display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: "500", color: "#1D4ED8", backgroundColor: "#DBEAFE", borderRadius: "12px", padding: "2px 8px 2px 10px" },
+  chipRemove:    { background: "none", border: "none", cursor: "pointer", fontSize: "10px", color: "#1D4ED8", padding: "0 1px", lineHeight: 1 },
+  cancelBtn:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 20px", cursor: "pointer" },
+  saveBtn:       { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#1E293B", border: "none", borderRadius: "5px", padding: "8px 28px", cursor: "pointer" },
+  saveBtnDisabled:{ fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#94A3B8", border: "none", borderRadius: "5px", padding: "8px 28px", cursor: "not-allowed" },
 };
 
 export default DailyScrumboardPage;

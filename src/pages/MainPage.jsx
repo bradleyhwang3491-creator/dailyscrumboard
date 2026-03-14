@@ -7,19 +7,22 @@ import UserManagementPage from "./UserManagementPage";
 import DailyScrumboardPage from "./DailyScrumboardPage";
 import AIWeeklyReportPage from "./AIWeeklyReportPage";
 import YearlyTaskBoardPage from "./YearlyTaskBoardPage";
+import YearlyTaskBoardCRMPage from "./YearlyTaskBoardCRMPage";
 import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
 import CommunicationBoardPage from "./CommunicationBoardPage";
 
 const MENU_ITEMS = [
-  { id: "dashboard",    label: "Communication Board", emoji: "◈" },
-  { id: "scrumboard",   label: "Daily Scrumboard",    emoji: "▦" },
-  { id: "yearly-board", label: "Yearly Task Board",   emoji: "◻" },
-  { id: "weekly-board", label: "Weekly Task Board",   emoji: "▤" },
-  { id: "ai-report",    label: "AI Weekly Report",    emoji: "◉" },
-  { id: "user-mgmt",    label: "사용자 정보 관리",     emoji: "◎", adminOnly: true },
+  { id: "dashboard",        label: "Communication Board",    emoji: "◈" },
+  { id: "scrumboard",       label: "Daily Scrumboard",       emoji: "▦" },
+  { id: "yearly-board",     label: "Yearly Task Board",      emoji: "◻" },
+  { id: "yearly-board-crm", label: "Yearly Task Board(CRM)", emoji: "◈", crmOnly: true },
+  { id: "weekly-board",     label: "Weekly Task Board",      emoji: "▤" },
+  { id: "ai-report",        label: "AI Weekly Report",       emoji: "◉" },
+  { id: "user-mgmt",        label: "사용자 정보 관리",        emoji: "◎", adminOnly: true },
 ];
 
 const ADMIN_ID = "SUNGHYUN_HWANG";
+const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
 
 function MainPage() {
   const navigate = useNavigate();
@@ -66,6 +69,9 @@ function MainPage() {
       )}
 
       {MENU_ITEMS.map((item) => {
+        // CRM 전용 메뉴: 허용된 사용자가 아니면 아예 렌더링 안 함
+        if (item.crmOnly && !CRM_USER_IDS.includes(user?.id)) return null;
+
         const disabled = item.adminOnly && user?.id !== ADMIN_ID;
         return (
           <button
@@ -148,6 +154,8 @@ function MainPage() {
             <DailyScrumboardPage />
           ) : activeMenu === "yearly-board" ? (
             <YearlyTaskBoardPage />
+          ) : activeMenu === "yearly-board-crm" ? (
+            <YearlyTaskBoardCRMPage />
           ) : activeMenu === "weekly-board" ? (
             <WeeklyTaskBoardPage />
           ) : activeMenu === "ai-report" ? (

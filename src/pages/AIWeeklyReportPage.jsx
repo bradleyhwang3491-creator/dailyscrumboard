@@ -131,7 +131,7 @@ function AIWeeklyReportPage() {
           `[업무 ${i + 1}]`,
           `제목: ${t.TITLE ?? ""}`,
           `상태: ${STATUS_LABEL[t.STATUS] ?? t.STATUS ?? ""}`,
-          `중요도: ${t.IMPORTANT_GUBUN ?? "일반"}`,
+          `중요도: ${t.IMPORTANT_GUBUN ?? "하"}`,
           `등록자: ${userMap[t.ID] ?? t.ID ?? ""}`,
           `등록일: ${t.INSERT_DATE ?? ""}`,
           t.DUE_EXPECT_DATE        ? `완료예정일: ${t.DUE_EXPECT_DATE}` : null,

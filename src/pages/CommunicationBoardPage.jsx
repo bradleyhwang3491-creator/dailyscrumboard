@@ -41,11 +41,11 @@ function mapTaskBoardRow(t) {
     taskType3Cd:     String(t.TASK_GUBUN3 ?? ""),
     taskType4Cd:     String(t.TASK_GUBUN4 ?? ""),
     status:          t.STATUS             ?? "TODO",
-    priority:        t.IMPORTANT_GUBUN    ?? "일반",
+    priority:        t.IMPORTANT_GUBUN    ?? "하",
     registrantId:    t.ID                 ?? "",
     content:         t.TASK_CONTENTS      ?? t.TASK_CONTENT ?? "",
-    teamNote:        t.TEAM_NOTE          ?? "",
-    issue:           t.ISSUE_MATTERS      ?? "",
+    teamNote:        t.LEADER_KNOW        ?? "",
+    issue:           t.ISSUE              ?? "",
     relatedLink:     t.PAGE_URL           ?? "",
     issueCompleteYn: t.ISSUE_COMPLETE_YN  ?? "N",
     regDate:         fromDate8(t.INSERT_DATE),
@@ -279,7 +279,7 @@ export default function CommunicationBoardPage() {
     if (!user?.id) return;
     setLoadingReceived(true);
     const { data } = await supabase
-      .from("TASKBOARD_REQUEST")
+      .from("TASK_BOARD_REQUEST")
       .select("*")
       .eq("REQUEST_TO_ID", user.id)
       .order("SYS_DT", { ascending: false });
@@ -292,7 +292,7 @@ export default function CommunicationBoardPage() {
     if (!user?.id) return;
     setLoadingSent(true);
     const { data } = await supabase
-      .from("TASKBOARD_REQUEST")
+      .from("TASK_BOARD_REQUEST")
       .select("*")
       .eq("REQUEST_FROM_ID", user.id)
       .order("SYS_DT", { ascending: false });
@@ -688,7 +688,7 @@ function ReplyModal({ item, userMap, onClose, onSuccess }) {
     setSubmitting(true);
     try {
       const { error: err } = await supabase
-        .from("TASKBOARD_REQUEST")
+        .from("TASK_BOARD_REQUEST")
         .update({ REPLY_CONTEXT: reply.trim() })
         .eq("TASK_REQUEST_ID", item.TASK_REQUEST_ID);
       if (err) throw err;
@@ -791,13 +791,13 @@ function RequestModal({ user, onClose, onSuccess }) {
     setSubmitting(true);
     try {
       const { data: maxData } = await supabase
-        .from("TASKBOARD_REQUEST")
+        .from("TASK_BOARD_REQUEST")
         .select("TASK_REQUEST_ID")
         .order("TASK_REQUEST_ID", { ascending: false })
         .limit(1);
       const newId = (maxData?.[0]?.TASK_REQUEST_ID ?? 0) + 1;
 
-      const { error } = await supabase.from("TASKBOARD_REQUEST").insert({
+      const { error } = await supabase.from("TASK_BOARD_REQUEST").insert({
         TASK_REQUEST_ID: newId,
         REQUEST_FROM_ID: user?.id      ?? "",
         REQUEST_TITLE:   form.title.trim(),

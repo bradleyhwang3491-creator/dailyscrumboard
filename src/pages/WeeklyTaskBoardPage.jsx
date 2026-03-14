@@ -11,9 +11,10 @@ const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_NAMES = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
 const PRIORITY_STYLE = {
-  일반:   { color: "#64748B", background: "#F1F5F9" },
-  긴급:   { color: "#B45309", background: "#FEF3C7" },
-  초긴급: { color: "#DC2626", background: "#FEE2E2" },
+  상:   { color: "#C2410C", background: "#FFEDD5" },
+  중:   { color: "#0369A1", background: "#E0F2FE" },
+  하:   { color: "#64748B", background: "#F1F5F9" },
+  긴급: { color: "#DC2626", background: "#FEE2E2" },
 };
 const STATUS_COLOR = { TODO: "#94A3B8", PROGRESS: "#3B82F6", HOLDING: "#F59E0B", COMPLETE: "#22C55E" };
 const STATUS_LABEL = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류",    COMPLETE: "완료"   };
@@ -21,16 +22,16 @@ const STATUS_TEXT  = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류
 
 /* ── 사용자별 고유 색상 팔레트 ── */
 const USER_COLORS = [
-  { border: "#3B82F6", badge: "#DBEAFE", text: "#1D4ED8" }, // blue
-  { border: "#22C55E", badge: "#DCFCE7", text: "#15803D" }, // green
-  { border: "#F97316", badge: "#FFEDD5", text: "#C2410C" }, // orange
-  { border: "#A855F7", badge: "#F3E8FF", text: "#7E22CE" }, // purple
-  { border: "#F43F5E", badge: "#FFE4E6", text: "#BE123C" }, // rose
-  { border: "#10B981", badge: "#D1FAE5", text: "#065F46" }, // emerald
-  { border: "#0EA5E9", badge: "#E0F2FE", text: "#0369A1" }, // sky
-  { border: "#EAB308", badge: "#FEF9C3", text: "#854D0E" }, // yellow
-  { border: "#EC4899", badge: "#FCE7F3", text: "#9D174D" }, // pink
-  { border: "#6366F1", badge: "#E0E7FF", text: "#3730A3" }, // indigo
+  { border: "#3B82F6", badge: "#DBEAFE", text: "#1D4ED8", cardBg: "#F5F9FF" }, // blue
+  { border: "#22C55E", badge: "#DCFCE7", text: "#15803D", cardBg: "#F4FBF6" }, // green
+  { border: "#F97316", badge: "#FFEDD5", text: "#C2410C", cardBg: "#FFF9F5" }, // orange
+  { border: "#A855F7", badge: "#F3E8FF", text: "#7E22CE", cardBg: "#FCF8FF" }, // purple
+  { border: "#F43F5E", badge: "#FFE4E6", text: "#BE123C", cardBg: "#FFF7F8" }, // rose
+  { border: "#10B981", badge: "#D1FAE5", text: "#065F46", cardBg: "#F4FBF8" }, // emerald
+  { border: "#0EA5E9", badge: "#E0F2FE", text: "#0369A1", cardBg: "#F4FAFF" }, // sky
+  { border: "#EAB308", badge: "#FEF9C3", text: "#854D0E", cardBg: "#FFFEF4" }, // yellow
+  { border: "#EC4899", badge: "#FCE7F3", text: "#9D174D", cardBg: "#FFF6FB" }, // pink
+  { border: "#6366F1", badge: "#E0E7FF", text: "#3730A3", cardBg: "#F7F7FF" }, // indigo
 ];
 function getUserColor(userId) {
   if (!userId) return USER_COLORS[0];
@@ -186,7 +187,7 @@ export default function WeeklyTaskBoardPage() {
         taskType3Cd:     String(t.TASK_GUBUN3 ?? ""),
         taskType4Cd:     String(t.TASK_GUBUN4 ?? ""),
         status:          t.STATUS             ?? "TODO",
-        priority:        t.IMPORTANT_GUBUN    ?? "일반",
+        priority:        t.IMPORTANT_GUBUN    ?? "하",
         registrantId:    t.ID                 ?? "",
         content:         t.TASK_CONTENTS      ?? t.TASK_CONTENT ?? "",
         teamNote:        t.TEAM_NOTE          ?? "",
@@ -511,7 +512,7 @@ export default function WeeklyTaskBoardPage() {
 
 /* ═══════════════════════ 업무 카드 ═══════════════════════ */
 function TaskCard({ task, userMap, onClick }) {
-  const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["일반"];
+  const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["하"];
   const sc  = STATUS_COLOR[task.status]     || STATUS_COLOR["TODO"];
   const sl  = STATUS_LABEL[task.status]     || task.status;
   const registrantName = userMap[task.registrantId] || task.registrantId || "";
@@ -519,7 +520,7 @@ function TaskCard({ task, userMap, onClick }) {
   const initial = registrantName ? registrantName.charAt(0) : "?";
 
   return (
-    <div style={{ ...s.card, borderLeft: `3px solid ${uc.border}` }} onClick={onClick}>
+    <div style={{ ...s.card, borderLeft: `3px solid ${uc.border}`, backgroundColor: uc.cardBg }} onClick={onClick}>
       {registrantName && (
         <div style={s.cardWriterRow}>
           <span style={{ ...s.cardAvatar, backgroundColor: uc.border }}>{initial}</span>
