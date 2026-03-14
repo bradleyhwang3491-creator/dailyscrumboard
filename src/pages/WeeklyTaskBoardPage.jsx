@@ -19,6 +19,26 @@ const STATUS_COLOR = { TODO: "#94A3B8", PROGRESS: "#3B82F6", HOLDING: "#F59E0B",
 const STATUS_LABEL = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류",    COMPLETE: "완료"   };
 const STATUS_TEXT  = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류",    COMPLETE: "완료"   };
 
+/* ── 사용자별 고유 색상 팔레트 ── */
+const USER_COLORS = [
+  { border: "#3B82F6", badge: "#DBEAFE", text: "#1D4ED8" }, // blue
+  { border: "#22C55E", badge: "#DCFCE7", text: "#15803D" }, // green
+  { border: "#F97316", badge: "#FFEDD5", text: "#C2410C" }, // orange
+  { border: "#A855F7", badge: "#F3E8FF", text: "#7E22CE" }, // purple
+  { border: "#F43F5E", badge: "#FFE4E6", text: "#BE123C" }, // rose
+  { border: "#10B981", badge: "#D1FAE5", text: "#065F46" }, // emerald
+  { border: "#0EA5E9", badge: "#E0F2FE", text: "#0369A1" }, // sky
+  { border: "#EAB308", badge: "#FEF9C3", text: "#854D0E" }, // yellow
+  { border: "#EC4899", badge: "#FCE7F3", text: "#9D174D" }, // pink
+  { border: "#6366F1", badge: "#E0E7FF", text: "#3730A3" }, // indigo
+];
+function getUserColor(userId) {
+  if (!userId) return USER_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) & 0xFFFFFFFF;
+  return USER_COLORS[Math.abs(h) % USER_COLORS.length];
+}
+
 /* ─── 날짜 헬퍼 ─── */
 function fromDate8(s) {
   if (!s || s.length < 8) return "";
@@ -491,13 +511,21 @@ export default function WeeklyTaskBoardPage() {
 
 /* ═══════════════════════ 업무 카드 ═══════════════════════ */
 function TaskCard({ task, userMap, onClick }) {
-  const ps = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["일반"];
-  const sc = STATUS_COLOR[task.status]    || STATUS_COLOR["TODO"];
-  const sl = STATUS_LABEL[task.status]    || task.status;
+  const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["일반"];
+  const sc  = STATUS_COLOR[task.status]     || STATUS_COLOR["TODO"];
+  const sl  = STATUS_LABEL[task.status]     || task.status;
   const registrantName = userMap[task.registrantId] || task.registrantId || "";
+  const uc  = getUserColor(task.registrantId);
+  const initial = registrantName ? registrantName.charAt(0) : "?";
+
   return (
-    <div style={s.card} onClick={onClick}>
-      {registrantName && <div style={s.cardWriter}>👤 {registrantName}</div>}
+    <div style={{ ...s.card, borderLeft: `3px solid ${uc.border}` }} onClick={onClick}>
+      {registrantName && (
+        <div style={s.cardWriterRow}>
+          <span style={{ ...s.cardAvatar, backgroundColor: uc.border }}>{initial}</span>
+          <span style={{ ...s.cardWriterName, color: uc.text, backgroundColor: uc.badge }}>{registrantName}</span>
+        </div>
+      )}
       <div style={s.cardTitle}>{task.title}</div>
       <div style={s.cardDates}>
         {task.plannedEnd && (
@@ -692,8 +720,10 @@ const s = {
   dataCellWeekend:{ backgroundColor: "#FAFAFA" },
 
   /* 카드 */
-  card:          { backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "7px", padding: "10px 12px", display: "flex", flexDirection: "column", gap: "5px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer", transition: "border-color 0.15s" },
-  cardWriter:    { fontSize: "10px", fontWeight: "600", color: "#94A3B8" },
+  card:           { backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "7px", padding: "10px 12px", display: "flex", flexDirection: "column", gap: "5px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer", transition: "box-shadow 0.15s", borderLeft: "3px solid #CBD5E1" },
+  cardWriterRow:  { display: "flex", alignItems: "center", gap: "5px" },
+  cardAvatar:     { width: "17px", height: "17px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "700", color: "#fff", flexShrink: 0 },
+  cardWriterName: { fontSize: "11px", fontWeight: "600", padding: "1px 7px", borderRadius: "10px", lineHeight: "1.6" },
   cardTitle:     { fontSize: "13px", fontWeight: "600", color: "#1E293B", lineHeight: "1.4" },
   cardDates:     { display: "flex", flexDirection: "column", gap: "2px" },
   cardDateRow:   { display: "flex", alignItems: "center", gap: "5px" },
