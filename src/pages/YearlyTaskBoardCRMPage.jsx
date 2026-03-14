@@ -4,8 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 상수 ─────────────── */
-const FIRST_W = 170;
-const MONTH_W = 200;
+const FIRST_W = 180;   // 좌측 고정 컬럼 너비
+const MONTH_W = 130;   // 월 컬럼 너비
 const TODAY   = new Date();
 
 const PRIORITY_STYLE = {
@@ -16,7 +16,6 @@ const PRIORITY_STYLE = {
 };
 const STATUS_COLOR = { TODO:"#94A3B8", PROGRESS:"#3B82F6", HOLDING:"#F59E0B", COMPLETE:"#22C55E" };
 
-/* ── 사용자별 고유 색상 팔레트 ── */
 const USER_COLORS = [
   { border: "#3B82F6", badge: "#DBEAFE", text: "#1D4ED8", cardBg: "#F5F9FF" },
   { border: "#22C55E", badge: "#DCFCE7", text: "#15803D", cardBg: "#F4FBF6" },
@@ -35,12 +34,10 @@ function getUserColor(userId) {
   for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) & 0xFFFFFFFF;
   return USER_COLORS[Math.abs(h) % USER_COLORS.length];
 }
-
 function fromDate8(s) {
   if (!s || s.length < 8) return "";
   return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
 }
-
 function getDisplayDate(rawActualEnd, rawPlannedEnd, status, rawInsert) {
   if (status === "COMPLETE" && rawActualEnd) return rawActualEnd;
   if (rawPlannedEnd) return rawPlannedEnd;
@@ -60,6 +57,7 @@ export default function YearlyTaskBoardCRMPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const MONTHS = t("yearly.months");
+
   const STATUS_LABEL = {
     TODO:     t("common.todo"),
     PROGRESS: t("common.inProgress"),
@@ -72,6 +70,7 @@ export default function YearlyTaskBoardCRMPage() {
     HOLDING:  t("common.holding"),
     COMPLETE: t("common.complete"),
   };
+
   const [tasks,      setTasks]      = useState([]);
   const [tm1,        setTm1]        = useState([]);
   const [tm2,        setTm2]        = useState([]);
@@ -81,6 +80,7 @@ export default function YearlyTaskBoardCRMPage() {
   const [year,       setYear]       = useState(TODAY.getFullYear());
   const [loading,    setLoading]    = useState(false);
   const [selected,   setSelected]   = useState(null);
+
   /* 조회 조건 */
   const [filterTm4,  setFilterTm4]  = useState("");
   const [filterUser, setFilterUser] = useState("");
@@ -123,31 +123,31 @@ export default function YearlyTaskBoardCRMPage() {
     }
 
     if (bd) {
-      const mapped = bd.map(t => ({
-        id:              t.BOARD_ID,
-        title:           t.TITLE              ?? "",
-        taskType1Cd:     String(t.TASK_GUBUN1 ?? ""),
-        taskType2Cd:     String(t.TASK_GUBUN2 ?? ""),
-        taskType3Cd:     String(t.TASK_GUBUN3 ?? ""),
-        taskType4Cd:     String(t.TASK_GUBUN4 ?? ""),
-        status:          t.STATUS             ?? "TODO",
-        priority:        t.IMPORTANT_GUBUN    ?? "하",
-        registrantId:    t.ID                 ?? "",
-        content:         t.TASK_CONTENTS      ?? t.TASK_CONTENT ?? "",
-        teamNote:        t.LEADER_KNOW        ?? "",
-        issue:           t.ISSUE              ?? "",
-        relatedLink:     t.PAGE_URL           ?? "",
-        issueCompleteYn: t.ISSUE_COMPLETE_YN  ?? "N",
-        regDate:         fromDate8(t.INSERT_DATE),
-        rawInsert:       t.INSERT_DATE        ?? "",
-        rawPlannedEnd:   t.DUE_EXPECT_DATE    ?? "",
-        rawActualEnd:    t.COMPLETE_DATE      ?? "",
-        insertDate:      fromDate8(t.INSERT_DATE),
-        plannedEnd:      fromDate8(t.DUE_EXPECT_DATE),
-        actualEnd:       fromDate8(t.COMPLETE_DATE),
+      const mapped = bd.map(r => ({
+        id:              r.BOARD_ID,
+        title:           r.TITLE              ?? "",
+        taskType1Cd:     String(r.TASK_GUBUN1 ?? ""),
+        taskType2Cd:     String(r.TASK_GUBUN2 ?? ""),
+        taskType3Cd:     String(r.TASK_GUBUN3 ?? ""),
+        taskType4Cd:     String(r.TASK_GUBUN4 ?? ""),
+        status:          r.STATUS             ?? "TODO",
+        priority:        r.IMPORTANT_GUBUN    ?? "하",
+        registrantId:    r.ID                 ?? "",
+        content:         r.TASK_CONTENTS      ?? r.TASK_CONTENT ?? "",
+        teamNote:        r.LEADER_KNOW        ?? "",
+        issue:           r.ISSUE              ?? "",
+        relatedLink:     r.PAGE_URL           ?? "",
+        issueCompleteYn: r.ISSUE_COMPLETE_YN  ?? "N",
+        regDate:         fromDate8(r.INSERT_DATE),
+        rawInsert:       r.INSERT_DATE        ?? "",
+        rawPlannedEnd:   r.DUE_EXPECT_DATE    ?? "",
+        rawActualEnd:    r.COMPLETE_DATE      ?? "",
+        insertDate:      fromDate8(r.INSERT_DATE),
+        plannedEnd:      fromDate8(r.DUE_EXPECT_DATE),
+        actualEnd:       fromDate8(r.COMPLETE_DATE),
       }));
-      setTasks(mapped.filter(t =>
-        getDisplayYear(t.rawActualEnd, t.rawPlannedEnd, t.status, t.rawInsert) === year
+      setTasks(mapped.filter(r =>
+        getDisplayYear(r.rawActualEnd, r.rawPlannedEnd, r.status, r.rawInsert) === year
       ));
     }
 
@@ -162,28 +162,27 @@ export default function YearlyTaskBoardCRMPage() {
     setTm2(mapTm(md2));
     setTm3(mapTm(md3));
     setTm4(mapTm(md4));
-
     setLoading(false);
   }
 
   /* ── 필터 적용 ── */
   const filteredTasks = useMemo(() =>
-    tasks.filter(t => {
-      if (filterTm4  && t.taskType4Cd !== filterTm4) return false;
-      if (filterUser && t.registrantId !== filterUser) return false;
+    tasks.filter(r => {
+      if (filterTm4  && r.taskType4Cd !== filterTm4) return false;
+      if (filterUser && r.registrantId !== filterUser) return false;
       return true;
     }),
   [tasks, filterTm4, filterUser]);
 
-  /* 등록자 목록 (tasks 기준 unique) */
+  /* 등록자 목록 */
   const uniqueRegistrants = useMemo(() => {
     const seen = new Set();
     return tasks
-      .filter(t => { if (!t.registrantId || seen.has(t.registrantId)) return false; seen.add(t.registrantId); return true; })
-      .map(t => ({ id: t.registrantId, name: userMap[t.registrantId] || t.registrantId }));
+      .filter(r => { if (!r.registrantId || seen.has(r.registrantId)) return false; seen.add(r.registrantId); return true; })
+      .map(r => ({ id: r.registrantId, name: userMap[r.registrantId] || r.registrantId }));
   }, [tasks, userMap]);
 
-  /* ── 섹션1: 업무구분4(outer) → 업무구분1(inner rows) → 월별 ── */
+  /* ── 업무구분4(outer) → 업무구분1(inner rows) → 월별 ── */
   const groupedByTm4 = useMemo(() => {
     const outerMap = new Map();
     filteredTasks.forEach(task => {
@@ -200,11 +199,11 @@ export default function YearlyTaskBoardCRMPage() {
     });
     return [...outerMap.entries()]
       .map(([tm4Key, innerMap]) => {
-        const tm4Item = tm4Key === "__none4__" ? null : tm4.find(t => String(t.TASK_ID) === tm4Key);
+        const tm4Item = tm4Key === "__none4__" ? null : tm4.find(r => String(r.TASK_ID) === tm4Key);
         const rows = [...innerMap.entries()]
           .map(([tm1Key, monthMap]) => ({
             tm1Key,
-            tm1Item: tm1Key === "__none1__" ? null : tm1.find(t => String(t.TASK_ID) === tm1Key),
+            tm1Item: tm1Key === "__none1__" ? null : tm1.find(r => String(r.TASK_ID) === tm1Key),
             monthMap,
           }))
           .sort((a, b) => (a.tm1Item?.TASK_NAME ?? "\uFFFF").localeCompare(b.tm1Item?.TASK_NAME ?? "\uFFFF", "ko"));
@@ -213,59 +212,19 @@ export default function YearlyTaskBoardCRMPage() {
       .sort((a, b) => (a.tm4Item?.TASK_NAME ?? "\uFFFF").localeCompare(b.tm4Item?.TASK_NAME ?? "\uFFFF", "ko"));
   }, [filteredTasks, tm1, tm4]);
 
-  /* ── 섹션2: 업무구분1(rows) → 월별 ── */
-  const groupedByTm1 = useMemo(() => {
-    const rowMap = new Map();
-    filteredTasks.forEach(task => {
-      const tm1Key = task.taskType1Cd || "__none1__";
-      const month  = getDisplayMonth(task.rawActualEnd, task.rawPlannedEnd, task.status, task.rawInsert);
-      if (!month || month < 1 || month > 12) return;
-      if (!rowMap.has(tm1Key)) rowMap.set(tm1Key, {});
-      const cell = rowMap.get(tm1Key);
-      if (!cell[month]) cell[month] = [];
-      cell[month].push(task);
-    });
-    return [...rowMap.entries()]
-      .map(([tm1Key, monthMap]) => ({
-        tm1Key,
-        tm1Item: tm1Key === "__none1__" ? null : tm1.find(t => String(t.TASK_ID) === tm1Key),
-        monthMap,
-      }))
-      .sort((a, b) => (a.tm1Item?.TASK_NAME ?? "\uFFFF").localeCompare(b.tm1Item?.TASK_NAME ?? "\uFFFF", "ko"));
-  }, [filteredTasks, tm1]);
-
   const isCurMonth = (month) => year === curYear && month === curMonth;
   const hasFilter  = filterTm4 || filterUser;
   const totalCount = filteredTasks.length;
-
-  /* ── 공통: 헤더 행 렌더 ── */
-  function renderHeaderRow(firstLabel) {
-    return (
-      <div style={s.headerRow}>
-        <div style={{ ...s.th, ...s.thFirst }}>{firstLabel}</div>
-        {MONTHS.map((m, i) => {
-          const cnt = filteredTasks.filter(t => {
-            const mo = getDisplayMonth(t.rawActualEnd, t.rawPlannedEnd, t.status, t.rawInsert);
-            return mo === i + 1;
-          }).length;
-          const cur = isCurMonth(i + 1);
-          return (
-            <div key={m} style={{ ...s.th, ...(cur ? s.thCurrent : cnt > 0 ? s.thHasData : {}) }}>
-              <span style={cur ? s.thLabelCur : {}}>{m}</span>
-              {cnt > 0 && <span style={{ ...s.monthCnt, ...(cur ? s.monthCntCur : {}) }}>{cnt}</span>}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
+  const MONTHS_IDX = [1,2,3,4,5,6,7,8,9,10,11,12];
 
   return (
     <div style={s.wrap}>
       {/* ── 상단 헤더 ── */}
       <div style={s.topBar}>
         <div style={s.titleArea}>
-          <h2 style={s.pageTitle}>Yearly Task Board <span style={s.crmBadge}>CRM</span></h2>
+          <h2 style={s.pageTitle}>
+            Yearly Task Board <span style={s.crmBadge}>CRM</span>
+          </h2>
           <span style={s.totalBadge}>{totalCount}건</span>
         </div>
         <div style={s.yearCtrl}>
@@ -281,8 +240,8 @@ export default function YearlyTaskBoardCRMPage() {
           <span style={s.filterLabel}>{t("common.task4")}</span>
           <select style={s.filterSelect} value={filterTm4} onChange={e => setFilterTm4(e.target.value)}>
             <option value="">{t("common.all")}</option>
-            {tm4.map(t => (
-              <option key={t.TASK_ID} value={String(t.TASK_ID)}>{t.TASK_NAME}</option>
+            {tm4.map(r => (
+              <option key={r.TASK_ID} value={String(r.TASK_ID)}>{r.TASK_NAME}</option>
             ))}
           </select>
         </div>
@@ -305,143 +264,104 @@ export default function YearlyTaskBoardCRMPage() {
       {loading ? (
         <div style={s.loadingBox}>{t("common.loading")}</div>
       ) : (
-        <>
-          {/* ══════════════ 섹션 1: 업무구분4 영역 ══════════════ */}
-          <div style={s.sectionHeader}>
-            <span style={s.sectionIcon}>◈</span>
-            <span style={s.sectionTitle}>{t("yearlyCRM.section4.title")}</span>
-            <span style={s.sectionSub}>{t("yearlyCRM.section4.desc")}</span>
-          </div>
-          <div style={s.tableOuter}>
-            <div style={{ minWidth: FIRST_W + MONTH_W * 12 }}>
-              {renderHeaderRow(`${t("yearlyCRM.section4.title")} / ${t("yearlyCRM.section1.title")}`)}
+        <div style={s.tableOuter}>
+          <div style={{ minWidth: FIRST_W + MONTH_W * 12 }}>
 
-              {groupedByTm4.length === 0 ? (
-                <div style={s.emptyBox}>
-                  {hasFilter ? t("yearlyCRM.noData") : t("yearlyCRM.noDataYear")}
-                </div>
-              ) : (
-                groupedByTm4.map(group => (
-                  <div key={group.tm4Key}>
-                    {/* ── 업무구분4 그룹 헤더 ── */}
-                    <div style={s.groupHeaderRow}>
-                      <div style={s.groupHeaderCell}>
-                        <span style={s.groupHeaderIcon}>▸</span>
-                        <span style={s.groupHeaderText}>
-                          {group.tm4Item ? group.tm4Item.TASK_NAME : t("common.unclassified")}
-                        </span>
-                        {group.tm4Item?.DEADLINE && (
-                          <span style={s.groupHeaderSub}>~{group.tm4Item.DEADLINE}</span>
-                        )}
-                      </div>
-                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(month => {
-                        const cnt = group.rows.reduce((sum, row) => sum + (row.monthMap[month]?.length ?? 0), 0);
-                        const cur = isCurMonth(month);
-                        return (
-                          <div key={month} style={{
-                            ...s.groupHeaderMonthCell,
-                            ...(cur ? s.groupHeaderMonthCellCur : {}),
-                          }}>
-                            {cnt > 0 && <span style={s.groupMonthCnt}>{cnt}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* ── 업무구분1 행들 ── */}
-                    {group.rows.map(row => (
-                      <div key={`${group.tm4Key}-${row.tm1Key}`} style={s.dataRow}>
-                        {/* 업무구분1 셀 */}
-                        <div style={{ ...s.td, ...s.type1Cell }}>
-                          {row.tm1Item ? (
-                            <>
-                              <div style={s.t1Name}>{row.tm1Item.TASK_NAME}</div>
-                              {row.tm1Item.OBJECTIVE && (
-                                <div style={s.t1Obj}>{row.tm1Item.OBJECTIVE}</div>
-                              )}
-                            </>
-                          ) : (
-                            <div style={{ ...s.t1Name, color: "#94A3B8" }}>{t("common.unclassified")}</div>
-                          )}
-                        </div>
-
-                        {/* 월별 셀 */}
-                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(month => {
-                          const cur = isCurMonth(month);
-                          return (
-                            <div key={month} style={{ ...s.td, ...s.monthCell, ...(cur ? s.monthCellCur : {}) }}>
-                              {(row.monthMap[month] ?? []).map(task => (
-                                <TaskCard
-                                  key={task.id}
-                                  task={task}
-                                  userMap={userMap}
-                                  onClick={() => setSelected({ task, tm1, tm2, tm3, tm4 })}
-                                />
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ))}
+            {/* ── 헤더 행 ── */}
+            <div style={s.headerRow}>
+              <div style={{ ...s.th, ...s.thFirst }}></div>
+              {MONTHS.map((m, i) => {
+                const cur = isCurMonth(i + 1);
+                const cnt = filteredTasks.filter(r => {
+                  const mo = getDisplayMonth(r.rawActualEnd, r.rawPlannedEnd, r.status, r.rawInsert);
+                  return mo === i + 1;
+                }).length;
+                return (
+                  <div key={m} style={{ ...s.th, ...(cur ? s.thCurrent : cnt > 0 ? s.thHasData : {}) }}>
+                    <span style={cur ? s.thLabelCur : {}}>{m}</span>
+                    {cnt > 0 && (
+                      <span style={{ ...s.monthCnt, ...(cur ? s.monthCntCur : {}) }}>{cnt}</span>
+                    )}
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
-          </div>
 
-          {/* ══════════════ 섹션 2: 업무구분1 영역 ══════════════ */}
-          <div style={{ ...s.sectionHeader, ...s.sectionHeader2 }}>
-            <span style={{ ...s.sectionIcon, ...s.sectionIcon2 }}>◈</span>
-            <span style={{ ...s.sectionTitle, ...s.sectionTitle2 }}>{t("yearlyCRM.section1.title")}</span>
-            <span style={s.sectionSub}>{t("yearlyCRM.section1.desc")}</span>
-          </div>
-          <div style={s.tableOuter}>
-            <div style={{ minWidth: FIRST_W + MONTH_W * 12 }}>
-              {renderHeaderRow(t("yearlyCRM.section1.title"))}
+            {/* ── 데이터 없을 때 ── */}
+            {groupedByTm4.length === 0 ? (
+              <div style={s.emptyBox}>
+                {hasFilter ? t("yearlyCRM.noData") : t("yearlyCRM.noDataYear")}
+              </div>
+            ) : (
+              groupedByTm4.map(group => (
+                <div key={group.tm4Key}>
 
-              {groupedByTm1.length === 0 ? (
-                <div style={s.emptyBox}>
-                  {hasFilter ? t("yearlyCRM.noData") : t("yearlyCRM.noDataYear")}
-                </div>
-              ) : (
-                groupedByTm1.map(row => (
-                  <div key={row.tm1Key} style={s.dataRow}>
-                    {/* 업무구분1 셀 */}
-                    <div style={{ ...s.td, ...s.type1Cell }}>
-                      {row.tm1Item ? (
-                        <>
-                          <div style={s.t1Name}>{row.tm1Item.TASK_NAME}</div>
-                          {row.tm1Item.OBJECTIVE && (
-                            <div style={s.t1Obj}>{row.tm1Item.OBJECTIVE}</div>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ ...s.t1Name, color: "#94A3B8" }}>{t("common.unclassified")}</div>
-                      )}
+                  {/* 업무구분4 그룹 헤더 행 */}
+                  <div style={s.groupHeaderRow}>
+                    <div style={s.groupHeaderCell}>
+                      <span style={s.groupHeaderText}>
+                        {group.tm4Item ? group.tm4Item.TASK_NAME : t("common.unclassified")}
+                      </span>
                     </div>
-
-                    {/* 월별 셀 */}
-                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(month => {
+                    {MONTHS_IDX.map(month => {
+                      const cnt = group.rows.reduce((sum, row) => sum + (row.monthMap[month]?.length ?? 0), 0);
                       const cur = isCurMonth(month);
                       return (
-                        <div key={month} style={{ ...s.td, ...s.monthCell, ...(cur ? s.monthCellCur : {}) }}>
-                          {(row.monthMap[month] ?? []).map(task => (
-                            <TaskCard
-                              key={task.id}
-                              task={task}
-                              userMap={userMap}
-                              onClick={() => setSelected({ task, tm1, tm2, tm3, tm4 })}
-                            />
-                          ))}
+                        <div key={month} style={{ ...s.groupHeaderMonthCell, ...(cur ? s.groupHeaderMonthCellCur : {}) }}>
+                          {cnt > 0 && <span style={s.groupMonthCnt}>{cnt}</span>}
                         </div>
                       );
                     })}
                   </div>
-                ))
-              )}
-            </div>
+
+                  {/* 업무구분1 행들 */}
+                  {group.rows.map(row => (
+                    <div key={`${group.tm4Key}-${row.tm1Key}`} style={s.dataRow}>
+
+                      {/* 좌측 고정 셀: 업무구분1명 + 담당자 + 마감 */}
+                      <div style={{ ...s.td, ...s.type1Cell }}>
+                        <div style={s.t1Name}>
+                          {row.tm1Item ? row.tm1Item.TASK_NAME : (
+                            <span style={{ color: "#94A3B8" }}>{t("common.unclassified")}</span>
+                          )}
+                        </div>
+                        {row.tm1Item?.COWORKERS && (
+                          <div style={s.t1Meta}>
+                            <span style={s.t1MetaLabel}>{t("weekly.card.assignee")}</span>
+                            <span style={s.t1MetaVal}>{row.tm1Item.COWORKERS}</span>
+                          </div>
+                        )}
+                        {row.tm1Item?.DEADLINE && (
+                          <div style={s.t1Meta}>
+                            <span style={s.t1MetaLabel}>{t("weekly.card.deadline")}</span>
+                            <span style={s.t1MetaVal}>{row.tm1Item.DEADLINE}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 월별 셀 */}
+                      {MONTHS_IDX.map(month => {
+                        const cur = isCurMonth(month);
+                        return (
+                          <div key={month} style={{ ...s.td, ...s.monthCell, ...(cur ? s.monthCellCur : {}) }}>
+                            {(row.monthMap[month] ?? []).map(task => (
+                              <TaskCard
+                                key={task.id}
+                                task={task}
+                                userMap={userMap}
+                                onClick={() => setSelected({ task, tm1, tm2, tm3, tm4 })}
+                              />
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ))
+            )}
           </div>
-        </>
+        </div>
       )}
 
       {/* ── 상세 팝업 ── */}
@@ -472,33 +392,14 @@ function TaskCard({ task, userMap, onClick }) {
   const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["하"];
   const sc  = STATUS_COLOR[task.status]     || STATUS_COLOR["TODO"];
   const sl  = STATUS_LABEL[task.status]     || task.status;
-  const registrantName = userMap[task.registrantId] || task.registrantId || "";
   const uc  = getUserColor(task.registrantId);
-  const initial = registrantName ? registrantName.charAt(0) : "?";
 
   return (
-    <div style={{ ...s.card, borderLeft: `3px solid ${uc.border}`, backgroundColor: uc.cardBg }} onClick={onClick}>
-      {registrantName && (
-        <div style={s.cardWriterRow}>
-          <span style={{ ...s.cardAvatar, backgroundColor: uc.border }}>{initial}</span>
-          <span style={{ ...s.cardWriterName, color: uc.text, backgroundColor: uc.badge }}>{registrantName}</span>
-        </div>
-      )}
+    <div
+      style={{ ...s.card, borderLeft: `3px solid ${uc.border}`, backgroundColor: uc.cardBg }}
+      onClick={onClick}
+    >
       <div style={s.cardTitle}>{task.title}</div>
-      <div style={s.cardDates}>
-        {task.plannedEnd && (
-          <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>{t("common.dueDate")}</span>
-            <span style={{ ...s.dateVal, color: "#2563EB" }}>{task.plannedEnd}</span>
-          </div>
-        )}
-        {task.actualEnd && (
-          <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>{t("common.completeDate")}</span>
-            <span style={{ ...s.dateVal, color: "#16A34A", fontWeight: "600" }}>{task.actualEnd}</span>
-          </div>
-        )}
-      </div>
       <div style={s.cardFooter}>
         <span style={{ ...s.statusBadge, color: sc, borderColor: sc }}>{sl}</span>
         <span style={{ ...s.priorityBadge, color: ps.color, backgroundColor: ps.background }}>{task.priority}</span>
@@ -519,7 +420,7 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
   const [textCopied, setTextCopied] = useState(false);
   const hasIssue      = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
-  const getTaskName   = (arr, id) => arr.find(t => String(t.TASK_ID) === String(id))?.TASK_NAME || id || "";
+  const getTaskName   = (arr, id) => arr.find(r => String(r.TASK_ID) === String(id))?.TASK_NAME || id || "";
   const inp = { ...ms.input, ...ms.inputRO };
 
   async function handleCopyText() {
@@ -538,7 +439,7 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
       line("작업완료일",     task.actualEnd),
       line("연관페이지링크", task.relatedLink),
       sep,
-      task.content?.trim()  ? `[작업내용]\n${task.content.trim()}`    : null,
+      task.content?.trim()  ? `[작업내용]\n${task.content.trim()}`     : null,
       task.teamNote?.trim() ? `[팀장공유내용]\n${task.teamNote.trim()}` : null,
       hasIssue ? `[이슈사항]\n${task.issue.trim()}\n이슈해결여부: ${issueResolved ? "Y (해결)" : "N (미해결)"}` : null,
       sep,
@@ -596,10 +497,14 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
               <input style={inp} type="text" readOnly value={getTaskName(tm4, task.taskType4Cd)} />
             </div>
           </div>
-          <div style={ms.halfRow}>
+          <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
               <label style={ms.label}>{t("yearly.detail.priority")}</label>
               <input style={inp} type="text" readOnly value={task.priority} />
+            </div>
+            <div style={ms.fieldWrap}>
+              <label style={ms.label}>{t("common.writer")}</label>
+              <input style={inp} type="text" readOnly value={userMap[task.registrantId] ?? task.registrantId} />
             </div>
           </div>
           <div style={ms.fullRow}>
@@ -662,112 +567,97 @@ const s = {
   yearBtn:   { fontFamily: "'Pretendard', sans-serif", fontSize: "18px", color: "#475569", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "6px", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
   yearLabel: { fontSize: "16px", fontWeight: "700", color: "#1E293B", minWidth: "52px", textAlign: "center" },
 
-  /* 조회 조건 */
   filterBar:    { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", padding: "10px 16px", marginBottom: "12px", flexShrink: 0 },
   filterField:  { display: "flex", alignItems: "center", gap: "8px" },
   filterLabel:  { fontSize: "13px", fontWeight: "500", color: "#5A5A5A", whiteSpace: "nowrap" },
   filterSelect: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 10px", outline: "none", minWidth: "140px", cursor: "pointer" },
   resetBtn:     { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 12px", cursor: "pointer" },
 
-  loadingBox:{ display: "flex", alignItems: "center", justifyContent: "center", height: "200px", color: "#94A3B8", fontSize: "14px" },
-  emptyBox:  { padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "14px" },
+  loadingBox: { display: "flex", alignItems: "center", justifyContent: "center", height: "200px", color: "#94A3B8", fontSize: "14px" },
+  emptyBox:   { padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "14px" },
 
-  /* 섹션 헤더 */
-  sectionHeader: {
-    display: "flex", alignItems: "center", gap: "8px",
-    padding: "10px 14px", marginBottom: "8px",
-    backgroundColor: "#EDE9FE", border: "1px solid #C4B5FD",
-    borderRadius: "8px", flexShrink: 0,
-  },
-  sectionHeader2: { backgroundColor: "#E0F2FE", border: "1px solid #93C5FD", marginTop: "20px" },
-  sectionIcon:    { fontSize: "13px", color: "#7C3AED" },
-  sectionIcon2:   { color: "#0369A1" },
-  sectionTitle:   { fontSize: "14px", fontWeight: "700", color: "#4C1D95" },
-  sectionTitle2:  { color: "#0C4A6E" },
-  sectionSub:     { fontSize: "12px", color: "#6D28D9", marginLeft: "4px" },
-
-  tableOuter: { overflowX: "auto", overflowY: "auto", maxHeight: "480px", border: "1px solid #E2E8F0", borderRadius: "10px", marginBottom: "4px" },
+  /* 테이블 */
+  tableOuter: { overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 260px)", border: "1px solid #E2E8F0", borderRadius: "10px" },
 
   /* 헤더 행 */
-  headerRow: { display: "flex", position: "sticky", top: 0, zIndex: 10, backgroundColor: "#1E293B" },
+  headerRow: {
+    display: "flex", position: "sticky", top: 0, zIndex: 10,
+    backgroundColor: "#374151",
+  },
   th: {
     width: `${MONTH_W}px`, minWidth: `${MONTH_W}px`, flexShrink: 0,
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "11px 12px", fontSize: "12px", fontWeight: "700", color: "#CBD5E1",
-    borderRight: "1px solid #334155", letterSpacing: "0.06em",
+    padding: "10px 10px", fontSize: "12px", fontWeight: "700", color: "#CBD5E1",
+    borderRight: "1px solid #4B5563",
   },
-  thFirst:    { width: `${FIRST_W}px`, minWidth: `${FIRST_W}px`, justifyContent: "center", color: "#F8FAFC", fontSize: "10px", textAlign: "center" },
-  thHasData:  { color: "#F8FAFC" },
-  thCurrent:  { color: "#FFFFFF", backgroundColor: "#1D4ED8" },
+  thFirst:    { width: `${FIRST_W}px`, minWidth: `${FIRST_W}px`, justifyContent: "center", color: "#F9FAFB", position: "sticky", left: 0, zIndex: 11, backgroundColor: "#374151" },
+  thHasData:  { color: "#F9FAFB" },
+  thCurrent:  { color: "#FFFFFF", backgroundColor: "#2563EB" },
   thLabelCur: { color: "#FFFFFF", fontWeight: "800" },
-  monthCnt:   { fontSize: "10px", fontWeight: "700", backgroundColor: "#334155", color: "#CBD5E1", borderRadius: "10px", padding: "1px 6px" },
+  monthCnt:   { fontSize: "10px", fontWeight: "700", backgroundColor: "#4B5563", color: "#D1D5DB", borderRadius: "10px", padding: "1px 5px" },
   monthCntCur:{ backgroundColor: "#3B82F6", color: "#FFF" },
 
   /* 업무구분4 그룹 헤더 행 */
   groupHeaderRow: {
     display: "flex",
-    backgroundColor: "#EDE9FE",
-    borderBottom: "1px solid #C4B5FD",
-    borderTop: "2px solid #7C3AED",
-    minHeight: "36px",
+    backgroundColor: "#F3F4F6",
+    borderBottom: "1px solid #D1D5DB",
+    borderTop: "1px solid #D1D5DB",
+    minHeight: "32px",
     position: "sticky",
     top: "40px",
     zIndex: 8,
   },
   groupHeaderCell: {
     width: `${FIRST_W}px`, minWidth: `${FIRST_W}px`, flexShrink: 0,
-    display: "flex", alignItems: "center", gap: "6px",
-    padding: "6px 10px",
-    borderRight: "2px solid #C4B5FD",
+    display: "flex", alignItems: "center",
+    padding: "6px 12px",
+    borderRight: "1px solid #D1D5DB",
     position: "sticky", left: 0, zIndex: 9,
-    backgroundColor: "#EDE9FE",
+    backgroundColor: "#F3F4F6",
   },
-  groupHeaderIcon: { fontSize: "10px", color: "#7C3AED", flexShrink: 0 },
-  groupHeaderText: { fontSize: "12px", fontWeight: "700", color: "#4C1D95", flex: 1 },
-  groupHeaderSub:  { fontSize: "10px", color: "#6D28D9", fontStyle: "italic", maxWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  groupHeaderText: { fontSize: "12px", fontWeight: "700", color: "#1F2937" },
   groupHeaderMonthCell: {
     width: `${MONTH_W}px`, minWidth: `${MONTH_W}px`, flexShrink: 0,
     display: "flex", alignItems: "center", justifyContent: "flex-end",
-    padding: "6px 10px",
-    borderRight: "1px solid #C4B5FD",
+    padding: "6px 8px",
+    borderRight: "1px solid #D1D5DB",
   },
-  groupHeaderMonthCellCur: { backgroundColor: "#DDD6FE" },
-  groupMonthCnt: { fontSize: "10px", fontWeight: "700", color: "#5B21B6", backgroundColor: "#C4B5FD", borderRadius: "8px", padding: "1px 6px" },
+  groupHeaderMonthCellCur: { backgroundColor: "#DBEAFE" },
+  groupMonthCnt: { fontSize: "10px", fontWeight: "600", color: "#374151", backgroundColor: "#D1D5DB", borderRadius: "8px", padding: "1px 5px" },
 
   /* 데이터 행 */
-  dataRow:   { display: "flex", borderBottom: "1px solid #E2E8F0", minHeight: "70px" },
-  td:        { borderRight: "1px solid #E2E8F0", padding: "8px", flexShrink: 0 },
+  dataRow: { display: "flex", borderBottom: "1px solid #E5E7EB", minHeight: "64px" },
+  td:      { borderRight: "1px solid #E5E7EB", padding: "8px", flexShrink: 0 },
 
-  /* 업무구분1 셀 (고정 left) */
+  /* 좌측 셀: 업무구분1 + 담당자 + 마감 */
   type1Cell: {
-    width: `${FIRST_W}px`, minWidth: `${FIRST_W}px`, backgroundColor: "#FAFAFA",
-    display: "flex", flexDirection: "column", gap: "4px",
-    position: "sticky", left: 0, zIndex: 5, borderRight: "2px solid #E2E8F0",
-    paddingLeft: "18px",
+    width: `${FIRST_W}px`, minWidth: `${FIRST_W}px`,
+    backgroundColor: "#FAFAFA",
+    display: "flex", flexDirection: "column", gap: "3px",
+    position: "sticky", left: 0, zIndex: 5,
+    borderRight: "1px solid #D1D5DB",
+    padding: "8px 10px",
   },
-  t1Name: { fontSize: "11px", fontWeight: "600", color: "#334155", lineHeight: "1.4" },
-  t1Obj:  { fontSize: "10px", color: "#94A3B8", fontStyle: "italic", lineHeight: "1.4" },
+  t1Name:     { fontSize: "11px", fontWeight: "600", color: "#1F2937", lineHeight: "1.4", wordBreak: "break-word" },
+  t1Meta:     { display: "flex", alignItems: "baseline", gap: "3px" },
+  t1MetaLabel:{ fontSize: "9px", fontWeight: "600", color: "#9CA3AF", whiteSpace: "nowrap", flexShrink: 0 },
+  t1MetaVal:  { fontSize: "10px", color: "#6B7280", lineHeight: "1.3", wordBreak: "break-word" },
 
-  monthCell:    { width: `${MONTH_W}px`, minWidth: `${MONTH_W}px`, backgroundColor: "#FFFFFF", display: "flex", flexDirection: "column", gap: "7px" },
+  monthCell:    { width: `${MONTH_W}px`, minWidth: `${MONTH_W}px`, backgroundColor: "#FFFFFF", display: "flex", flexDirection: "column", gap: "5px" },
   monthCellCur: { backgroundColor: "#EFF6FF", borderTop: "2px solid #3B82F6" },
 
+  /* 카드 */
   card: {
-    backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "7px",
-    padding: "9px 10px", display: "flex", flexDirection: "column", gap: "5px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer", transition: "box-shadow 0.15s",
+    backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", borderRadius: "6px",
+    padding: "7px 8px", display: "flex", flexDirection: "column", gap: "4px",
+    boxShadow: "0 1px 2px rgba(0,0,0,0.05)", cursor: "pointer", transition: "box-shadow 0.15s",
     borderLeft: "3px solid #CBD5E1",
   },
-  cardWriterRow:  { display: "flex", alignItems: "center", gap: "5px" },
-  cardAvatar:     { width: "17px", height: "17px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: "700", color: "#fff", flexShrink: 0 },
-  cardWriterName: { fontSize: "11px", fontWeight: "600", padding: "1px 7px", borderRadius: "10px", lineHeight: "1.6" },
-  cardTitle:    { fontSize: "12px", fontWeight: "600", color: "#1E293B", lineHeight: "1.4" },
-  cardDates:    { display: "flex", flexDirection: "column", gap: "2px" },
-  cardDateRow:  { display: "flex", alignItems: "center", gap: "5px" },
-  dateLbl:      { fontSize: "10px", fontWeight: "500", color: "#94A3B8", flexShrink: 0 },
-  dateVal:      { fontSize: "11px" },
-  cardFooter:   { display: "flex", gap: "4px", flexWrap: "wrap", marginTop: "2px" },
-  statusBadge:  { fontSize: "10px", fontWeight: "600", padding: "1px 6px", borderRadius: "4px", border: "1px solid", backgroundColor: "transparent" },
-  priorityBadge:{ fontSize: "10px", fontWeight: "600", padding: "1px 6px", borderRadius: "4px" },
+  cardTitle:    { fontSize: "11px", fontWeight: "600", color: "#1E293B", lineHeight: "1.4", wordBreak: "break-word" },
+  cardFooter:   { display: "flex", gap: "3px", flexWrap: "wrap" },
+  statusBadge:  { fontSize: "9px", fontWeight: "600", padding: "1px 5px", borderRadius: "3px", border: "1px solid", backgroundColor: "transparent" },
+  priorityBadge:{ fontSize: "9px", fontWeight: "600", padding: "1px 5px", borderRadius: "3px" },
 };
 
 const ms = {
@@ -779,10 +669,9 @@ const ms = {
   body:     { padding: "20px 24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "14px" },
   footer:   { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "14px 24px 18px", borderTop: "1px solid #E8E8E8", flexShrink: 0 },
   footerRight: { display: "flex", gap: "8px" },
-  copyTextBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#475569", backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
+  copyTextBtn:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#475569", backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
   copyTextBtnDone: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#16A34A", backgroundColor: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
   fullRow:   { display: "flex", flexDirection: "column", gap: "5px" },
-  halfRow:   { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
   twoCol:    { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" },
   fieldWrap: { display: "flex", flexDirection: "column", gap: "5px" },
   label:     { fontSize: "12px", fontWeight: "500", color: "#64748B" },
