@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { useLanguage } from "../context/LanguageContext";
 
 /** 사용자 정보 관리 페이지 */
 function UserManagementPage() {
+  const { t } = useLanguage();
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -66,7 +68,7 @@ function UserManagementPage() {
   /** 아이디 중복 확인 */
   async function handleCheckId() {
     if (!form.id.trim()) {
-      setFormErrors((prev) => ({ ...prev, id: "아이디를 입력해주세요." }));
+      setFormErrors((prev) => ({ ...prev, id: t("userMgmt.registerModal.required") }));
       return;
     }
     setIdChecking(true);
@@ -87,11 +89,11 @@ function UserManagementPage() {
   /** 등록 폼 유효성 검사 */
   function validateForm() {
     const errors = {};
-    if (!form.deptCd) errors.deptCd = "부서를 선택해주세요.";
-    if (!form.id.trim()) errors.id = "아이디를 입력해주세요.";
-    else if (idStatus !== "available") errors.id = "아이디 중복 확인을 해주세요.";
-    if (!form.name.trim()) errors.name = "이름을 입력해주세요.";
-    if (!form.password.trim()) errors.password = "비밀번호를 입력해주세요.";
+    if (!form.deptCd) errors.deptCd = t("userMgmt.registerModal.required");
+    if (!form.id.trim()) errors.id = t("userMgmt.registerModal.required");
+    else if (idStatus !== "available") errors.id = t("userMgmt.registerModal.required");
+    if (!form.name.trim()) errors.name = t("userMgmt.registerModal.required");
+    if (!form.password.trim()) errors.password = t("userMgmt.registerModal.required");
     return errors;
   }
 
@@ -111,7 +113,7 @@ function UserManagementPage() {
     });
     setRegisterLoading(false);
     if (error) {
-      setFormErrors({ submit: "등록 중 오류가 발생했습니다: " + error.message });
+      setFormErrors({ submit: t("userMgmt.registerModal.errRegister") + error.message });
       return;
     }
     closeModal();
@@ -143,8 +145,8 @@ function UserManagementPage() {
   /** 사용자 수정 */
   async function handleUpdate() {
     const errors = {};
-    if (!editForm.name.trim()) errors.name = "이름을 입력해주세요.";
-    if (!editForm.password.trim()) errors.password = "비밀번호를 입력해주세요.";
+    if (!editForm.name.trim()) errors.name = t("userMgmt.registerModal.required");
+    if (!editForm.password.trim()) errors.password = t("userMgmt.registerModal.required");
     if (Object.keys(errors).length > 0) {
       setEditErrors(errors);
       return;
@@ -156,7 +158,7 @@ function UserManagementPage() {
       .eq("ID", editTarget.ID);
     setEditLoading(false);
     if (error) {
-      setEditErrors({ submit: "수정 중 오류가 발생했습니다: " + error.message });
+      setEditErrors({ submit: t("userMgmt.editModal.errEdit") + error.message });
       return;
     }
     closeEditModal();
@@ -167,39 +169,39 @@ function UserManagementPage() {
     <div style={s.wrap}>
       {/* 타이틀 + 등록 버튼 */}
       <div style={s.topBar}>
-        <h2 style={s.pageTitle}>사용자 정보 관리</h2>
+        <h2 style={s.pageTitle}>{t("userMgmt.title")}</h2>
         <button style={s.registerBtn} onClick={() => setIsModalOpen(true)}>
-          + 등록
+          {t("userMgmt.addBtn")}
         </button>
       </div>
 
       {/* 조회 조건 */}
       <div style={s.searchBar}>
         <div style={s.searchField}>
-          <label style={s.label}>부서</label>
+          <label style={s.label}>{t("userMgmt.deptLabel")}</label>
           <select
             style={s.select}
             value={searchDept}
             onChange={(e) => setSearchDept(e.target.value)}
           >
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {departments.map((d) => (
               <option key={d.DEPT_CD} value={d.DEPT_CD}>{d.DEPT_NM}</option>
             ))}
           </select>
         </div>
         <div style={s.searchField}>
-          <label style={s.label}>이름</label>
+          <label style={s.label}>{t("userMgmt.nameLabel")}</label>
           <input
             style={s.input}
             type="text"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="이름 검색"
+            placeholder={t("userMgmt.namePlaceholder")}
           />
         </div>
-        <button style={s.searchBtn} onClick={handleSearch}>조회</button>
+        <button style={s.searchBtn} onClick={handleSearch}>{t("userMgmt.searchBtn")}</button>
       </div>
 
       {/* 데이터 테이블 */}
@@ -207,20 +209,20 @@ function UserManagementPage() {
         <table style={s.table}>
           <thead>
             <tr>
-              <th style={s.th}>부서</th>
-              <th style={s.th}>이름</th>
-              <th style={s.th}>아이디</th>
-              <th style={{ ...s.th, width: "80px", textAlign: "center" }}>관리</th>
+              <th style={s.th}>{t("userMgmt.table.dept")}</th>
+              <th style={s.th}>{t("userMgmt.table.name")}</th>
+              <th style={s.th}>{t("userMgmt.table.id")}</th>
+              <th style={{ ...s.th, width: "80px", textAlign: "center" }}>{t("userMgmt.table.manage")}</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={3} style={s.emptyCell}>불러오는 중...</td>
+                <td colSpan={3} style={s.emptyCell}>{t("userMgmt.table.loading")}</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={4} style={s.emptyCell}>조회된 사용자가 없습니다.</td>
+                <td colSpan={4} style={s.emptyCell}>{t("userMgmt.table.noData")}</td>
               </tr>
             ) : (
               users.map((u) => (
@@ -229,7 +231,7 @@ function UserManagementPage() {
                   <td style={s.td}>{u.NAME}</td>
                   <td style={s.td}>{u.ID}</td>
                   <td style={{ ...s.td, textAlign: "center" }}>
-                    <button style={s.editBtn} onClick={() => openEditModal(u)}>수정</button>
+                    <button style={s.editBtn} onClick={() => openEditModal(u)}>{t("userMgmt.editBtn")}</button>
                   </td>
                 </tr>
               ))
@@ -243,14 +245,14 @@ function UserManagementPage() {
         <div style={s.overlay} onClick={closeModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
-              <span style={s.modalTitle}>사용자 등록</span>
+              <span style={s.modalTitle}>{t("userMgmt.registerModal.title")}</span>
               <button style={s.closeBtn} onClick={closeModal}>✕</button>
             </div>
 
             <div style={s.modalBody}>
               {/* 부서 */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>부서 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.registerModal.dept")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <select
                     style={{ ...s.select, width: "100%" }}
@@ -260,7 +262,7 @@ function UserManagementPage() {
                       setFormErrors((p) => ({ ...p, deptCd: undefined }));
                     }}
                   >
-                    <option value="">부서 선택</option>
+                    <option value="">{t("userMgmt.registerModal.deptSelect")}</option>
                     {departments.map((d) => (
                       <option key={d.DEPT_CD} value={d.DEPT_CD}>{d.DEPT_NM}</option>
                     ))}
@@ -271,14 +273,14 @@ function UserManagementPage() {
 
               {/* 아이디 + 중복확인 */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>아이디 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.registerModal.id")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <div style={s.idRow}>
                     <input
                       style={{ ...s.input, flex: 1 }}
                       type="text"
                       value={form.id}
-                      placeholder="아이디 입력"
+                      placeholder={t("userMgmt.registerModal.idInput")}
                       onChange={(e) => {
                         setForm((p) => ({ ...p, id: e.target.value }));
                         setIdStatus(null);
@@ -290,14 +292,14 @@ function UserManagementPage() {
                       onClick={handleCheckId}
                       disabled={idChecking}
                     >
-                      {idChecking ? "확인중..." : "중복확인"}
+                      {idChecking ? t("userMgmt.registerModal.checking") : t("userMgmt.registerModal.checkDuplicate")}
                     </button>
                   </div>
                   {idStatus === "available" && (
-                    <p style={s.idAvailable}>사용 가능한 아이디입니다.</p>
+                    <p style={s.idAvailable}>{t("userMgmt.registerModal.idAvailable")}</p>
                   )}
                   {idStatus === "taken" && (
-                    <p style={s.idTaken}>이미 사용 중인 아이디입니다.</p>
+                    <p style={s.idTaken}>{t("userMgmt.registerModal.idTaken")}</p>
                   )}
                   {formErrors.id && <p style={s.fieldErr}>{formErrors.id}</p>}
                 </div>
@@ -305,13 +307,13 @@ function UserManagementPage() {
 
               {/* 이름 */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>이름 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.registerModal.name")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
                     type="text"
                     value={form.name}
-                    placeholder="이름 입력"
+                    placeholder={t("userMgmt.registerModal.name")}
                     onChange={(e) => {
                       setForm((p) => ({ ...p, name: e.target.value }));
                       setFormErrors((p) => ({ ...p, name: undefined }));
@@ -323,13 +325,13 @@ function UserManagementPage() {
 
               {/* 비밀번호 */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>비밀번호 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.registerModal.pw")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
                     type="password"
                     value={form.password}
-                    placeholder="비밀번호 입력"
+                    placeholder={t("userMgmt.registerModal.pw")}
                     onChange={(e) => {
                       setForm((p) => ({ ...p, password: e.target.value }));
                       setFormErrors((p) => ({ ...p, password: undefined }));
@@ -343,13 +345,13 @@ function UserManagementPage() {
             </div>
 
             <div style={s.modalFooter}>
-              <button style={s.cancelBtn} onClick={closeModal}>취소</button>
+              <button style={s.cancelBtn} onClick={closeModal}>{t("common.close")}</button>
               <button
                 style={s.submitBtn}
                 onClick={handleRegister}
                 disabled={registerLoading}
               >
-                {registerLoading ? "등록 중..." : "등록"}
+                {registerLoading ? t("common.registering") : t("common.register")}
               </button>
             </div>
           </div>
@@ -360,14 +362,14 @@ function UserManagementPage() {
         <div style={s.overlay} onClick={closeEditModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
-              <span style={s.modalTitle}>사용자 수정</span>
+              <span style={s.modalTitle}>{t("userMgmt.editModal.title")}</span>
               <button style={s.closeBtn} onClick={closeEditModal}>✕</button>
             </div>
 
             <div style={s.modalBody}>
               {/* 부서 (읽기 전용) */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>부서</label>
+                <label style={s.formLabel}>{t("userMgmt.table.dept")}</label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box", backgroundColor: "#F5F5F5", color: "#888" }}
@@ -380,7 +382,7 @@ function UserManagementPage() {
 
               {/* 아이디 (읽기 전용) */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>아이디</label>
+                <label style={s.formLabel}>{t("userMgmt.table.id")}</label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box", backgroundColor: "#F5F5F5", color: "#888" }}
@@ -393,13 +395,13 @@ function UserManagementPage() {
 
               {/* 이름 (수정 가능) */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>이름 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.editModal.name")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
                     type="text"
                     value={editForm.name}
-                    placeholder="이름 입력"
+                    placeholder={t("userMgmt.editModal.name")}
                     onChange={(e) => {
                       setEditForm((p) => ({ ...p, name: e.target.value }));
                       setEditErrors((p) => ({ ...p, name: undefined }));
@@ -411,13 +413,13 @@ function UserManagementPage() {
 
               {/* 비밀번호 (수정 가능) */}
               <div style={s.formRow}>
-                <label style={s.formLabel}>비밀번호 <span style={s.required}>*</span></label>
+                <label style={s.formLabel}>{t("userMgmt.editModal.pw")} <span style={s.required}>*</span></label>
                 <div style={s.formControl}>
                   <input
                     style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
                     type="password"
                     value={editForm.password}
-                    placeholder="새 비밀번호 입력"
+                    placeholder={t("userMgmt.editModal.pw")}
                     onChange={(e) => {
                       setEditForm((p) => ({ ...p, password: e.target.value }));
                       setEditErrors((p) => ({ ...p, password: undefined }));
@@ -431,9 +433,9 @@ function UserManagementPage() {
             </div>
 
             <div style={s.modalFooter}>
-              <button style={s.cancelBtn} onClick={closeEditModal}>취소</button>
+              <button style={s.cancelBtn} onClick={closeEditModal}>{t("common.close")}</button>
               <button style={s.submitBtn} onClick={handleUpdate} disabled={editLoading}>
-                {editLoading ? "저장 중..." : "저장"}
+                {editLoading ? t("userMgmt.editModal.saving") : t("userMgmt.editModal.save")}
               </button>
             </div>
           </div>

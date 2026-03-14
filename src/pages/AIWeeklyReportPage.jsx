@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useLanguage } from "../context/LanguageContext";
 
 /* ────────────────────── Gemini 설정 ────────────────────── */
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -16,8 +17,6 @@ const FALLBACK_MODELS = [
 
 /* ────────────────────── 헬퍼 ────────────────────── */
 function toDate8(iso) { return iso ? iso.replace(/-/g, "") : ""; }
-
-const STATUS_LABEL = { TODO: "TO-DO", PROGRESS: "진행 중", HOLDING: "보류", COMPLETE: "완료" };
 
 /** Gemini API 호출 (모델 폴백 포함) */
 async function callGemini(prompt) {
@@ -54,6 +53,13 @@ async function callGemini(prompt) {
 function AIWeeklyReportPage() {
   const { user }  = useAuth();
   const isMobile  = useBreakpoint(768);
+  const { t } = useLanguage();
+  const STATUS_LABEL = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
 
   const today   = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -213,7 +219,7 @@ function AIWeeklyReportPage() {
         <div style={isMobile ? s.filterRowMobile : s.filterRow}>
           {/* 조회 기간 */}
           <div style={isMobile ? s.filterFieldFull : s.filterField}>
-            <label style={s.filterLabel}>조회 기간</label>
+            <label style={s.filterLabel}>{t("aiReport.period")}</label>
             <div style={s.dateRange}>
               <input type="date" style={isMobile ? s.dateInputFull : s.dateInput} value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)} />
@@ -225,20 +231,20 @@ function AIWeeklyReportPage() {
 
           {/* 업무구분 */}
           <div style={isMobile ? s.filterFieldFull : s.filterField}>
-            <label style={s.filterLabel}>업무구분</label>
+            <label style={s.filterLabel}>{t("aiReport.task")}</label>
             <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={taskType1Cd}
               onChange={(e) => setTaskType1Cd(e.target.value)}>
-              <option value="">전체</option>
+              <option value="">{t("common.all")}</option>
               {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
             </select>
           </div>
 
           {/* 등록자 */}
           <div style={isMobile ? s.filterFieldFull : s.filterField}>
-            <label style={s.filterLabel}>등록자</label>
+            <label style={s.filterLabel}>{t("common.writer")}</label>
             <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={searchUserId}
               onChange={(e) => setSearchUserId(e.target.value)}>
-              <option value="">전체</option>
+              <option value="">{t("common.all")}</option>
               {deptUsers.map((u) => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
             </select>
           </div>
@@ -247,7 +253,7 @@ function AIWeeklyReportPage() {
           <div style={isMobile ? s.btnFieldFull : s.btnField}>
             <button style={isLoading ? s.genBtnDisabled : s.genBtn}
               onClick={handleGenerate} disabled={isLoading}>
-              {isLoading ? "⏳  생성 중..." : "✨  REPORT 생성"}
+              {isLoading ? t("aiReport.generatingBtn") : t("aiReport.generateBtn")}
             </button>
           </div>
         </div>
@@ -265,7 +271,7 @@ function AIWeeklyReportPage() {
             <span style={{ ...s.dot, animationDelay: "0.4s" }} />
           </div>
           <p style={s.loadingText}>
-            {isMobile ? "AI가 REPORT를 작성하고 있습니다..." : "AI가 일반 REPORT와 보고서를 동시에 작성하고 있습니다..."}
+            {isMobile ? t("aiReport.loadingMobile") : t("aiReport.loadingDesktop")}
           </p>
         </div>
       )}
@@ -280,14 +286,14 @@ function AIWeeklyReportPage() {
                 style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "normal" ? s.tabActive : s.tabInactive) }}
                 onClick={() => setActiveTab("normal")}
               >
-                {isMobile ? "📊 일반" : "📊 일반 REPORT"}
+                {isMobile ? t("aiReport.tab1Mobile") : t("aiReport.tab1Desktop")}
                 {reports.normal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "normal" ? "#3A3A3A" : "#94A3B8" }} />}
               </button>
               <button
                 style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "formal" ? s.tabActive : s.tabInactive) }}
                 onClick={() => setActiveTab("formal")}
               >
-                {isMobile ? "📋 보고서" : "📋 보고서 작성 REPORT"}
+                {isMobile ? t("aiReport.tab2Mobile") : t("aiReport.tab2Desktop")}
                 {reports.formal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "formal" ? "#3A3A3A" : "#94A3B8" }} />}
               </button>
             </div>
@@ -296,7 +302,7 @@ function AIWeeklyReportPage() {
               onClick={() => handleCopy(activeTab)}
               disabled={!reports[activeTab]}
             >
-              {copiedTab === activeTab ? "✅ 복사됨!" : "📋 복사"}
+              {copiedTab === activeTab ? t("aiReport.copiedBtn") : t("aiReport.copyBtn")}
             </button>
           </div>
 
@@ -315,7 +321,7 @@ function AIWeeklyReportPage() {
                     return <p key={i} style={s.bullet}>{renderBold(t.slice(2))}</p>;
                   return <p key={i} style={s.bodyLine}>{renderBold(t)}</p>;
                 })
-              : <p style={s.emptyTabMsg}>이 유형의 REPORT는 생성되지 않았습니다.</p>
+              : <p style={s.emptyTabMsg}>{t("aiReport.noReport")}</p>
             }
           </div>
         </div>

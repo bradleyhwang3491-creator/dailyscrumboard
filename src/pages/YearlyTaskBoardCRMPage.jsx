@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 상수 ─────────────── */
-const MONTHS  = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 const FIRST_W = 170;
 const MONTH_W = 200;
 const TODAY   = new Date();
@@ -15,8 +15,6 @@ const PRIORITY_STYLE = {
   긴급: { color: "#DC2626", background: "#FEE2E2" },
 };
 const STATUS_COLOR = { TODO:"#94A3B8", PROGRESS:"#3B82F6", HOLDING:"#F59E0B", COMPLETE:"#22C55E" };
-const STATUS_LABEL = { TODO:"TO-DO", PROGRESS:"진행중", HOLDING:"보류", COMPLETE:"완료" };
-const STATUS_TEXT  = { TODO:"TO-DO", PROGRESS:"진행중", HOLDING:"보류", COMPLETE:"완료" };
 
 /* ── 사용자별 고유 색상 팔레트 ── */
 const USER_COLORS = [
@@ -60,6 +58,20 @@ function getDisplayYear(rawActualEnd, rawPlannedEnd, status, rawInsert) {
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 export default function YearlyTaskBoardCRMPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const MONTHS = t("yearly.months");
+  const STATUS_LABEL = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
+  const STATUS_TEXT = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
   const [tasks,      setTasks]      = useState([]);
   const [tm1,        setTm1]        = useState([]);
   const [tm2,        setTm2]        = useState([]);
@@ -266,18 +278,18 @@ export default function YearlyTaskBoardCRMPage() {
       {/* ── 조회 조건 ── */}
       <div style={s.filterBar}>
         <div style={s.filterField}>
-          <span style={s.filterLabel}>업무구분4</span>
+          <span style={s.filterLabel}>{t("common.task4")}</span>
           <select style={s.filterSelect} value={filterTm4} onChange={e => setFilterTm4(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {tm4.map(t => (
               <option key={t.TASK_ID} value={String(t.TASK_ID)}>{t.TASK_NAME}</option>
             ))}
           </select>
         </div>
         <div style={s.filterField}>
-          <span style={s.filterLabel}>등록자</span>
+          <span style={s.filterLabel}>{t("common.writer")}</span>
           <select style={s.filterSelect} value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {uniqueRegistrants.map(r => (
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
@@ -285,28 +297,28 @@ export default function YearlyTaskBoardCRMPage() {
         </div>
         {hasFilter && (
           <button style={s.resetBtn} onClick={() => { setFilterTm4(""); setFilterUser(""); }}>
-            초기화
+            {t("common.reset")}
           </button>
         )}
       </div>
 
       {loading ? (
-        <div style={s.loadingBox}>데이터를 불러오는 중...</div>
+        <div style={s.loadingBox}>{t("common.loading")}</div>
       ) : (
         <>
           {/* ══════════════ 섹션 1: 업무구분4 영역 ══════════════ */}
           <div style={s.sectionHeader}>
             <span style={s.sectionIcon}>◈</span>
-            <span style={s.sectionTitle}>업무구분4</span>
-            <span style={s.sectionSub}>업무구분4 그룹 → 업무구분1 월별 현황</span>
+            <span style={s.sectionTitle}>{t("yearlyCRM.section4.title")}</span>
+            <span style={s.sectionSub}>{t("yearlyCRM.section4.desc")}</span>
           </div>
           <div style={s.tableOuter}>
             <div style={{ minWidth: FIRST_W + MONTH_W * 12 }}>
-              {renderHeaderRow("업무구분4 / 업무구분1")}
+              {renderHeaderRow(`${t("yearlyCRM.section4.title")} / ${t("yearlyCRM.section1.title")}`)}
 
               {groupedByTm4.length === 0 ? (
                 <div style={s.emptyBox}>
-                  {hasFilter ? "조회 조건에 해당하는 업무가 없습니다." : "해당 연도에 등록된 업무가 없습니다."}
+                  {hasFilter ? t("yearlyCRM.noData") : t("yearlyCRM.noDataYear")}
                 </div>
               ) : (
                 groupedByTm4.map(group => (
@@ -316,7 +328,7 @@ export default function YearlyTaskBoardCRMPage() {
                       <div style={s.groupHeaderCell}>
                         <span style={s.groupHeaderIcon}>▸</span>
                         <span style={s.groupHeaderText}>
-                          {group.tm4Item ? group.tm4Item.TASK_NAME : "미분류"}
+                          {group.tm4Item ? group.tm4Item.TASK_NAME : t("common.unclassified")}
                         </span>
                         {group.tm4Item?.DEADLINE && (
                           <span style={s.groupHeaderSub}>~{group.tm4Item.DEADLINE}</span>
@@ -349,7 +361,7 @@ export default function YearlyTaskBoardCRMPage() {
                               )}
                             </>
                           ) : (
-                            <div style={{ ...s.t1Name, color: "#94A3B8" }}>미분류</div>
+                            <div style={{ ...s.t1Name, color: "#94A3B8" }}>{t("common.unclassified")}</div>
                           )}
                         </div>
 
@@ -380,16 +392,16 @@ export default function YearlyTaskBoardCRMPage() {
           {/* ══════════════ 섹션 2: 업무구분1 영역 ══════════════ */}
           <div style={{ ...s.sectionHeader, ...s.sectionHeader2 }}>
             <span style={{ ...s.sectionIcon, ...s.sectionIcon2 }}>◈</span>
-            <span style={{ ...s.sectionTitle, ...s.sectionTitle2 }}>업무구분1</span>
-            <span style={s.sectionSub}>업무구분1 월별 현황</span>
+            <span style={{ ...s.sectionTitle, ...s.sectionTitle2 }}>{t("yearlyCRM.section1.title")}</span>
+            <span style={s.sectionSub}>{t("yearlyCRM.section1.desc")}</span>
           </div>
           <div style={s.tableOuter}>
             <div style={{ minWidth: FIRST_W + MONTH_W * 12 }}>
-              {renderHeaderRow("업무구분1")}
+              {renderHeaderRow(t("yearlyCRM.section1.title"))}
 
               {groupedByTm1.length === 0 ? (
                 <div style={s.emptyBox}>
-                  {hasFilter ? "조회 조건에 해당하는 업무가 없습니다." : "해당 연도에 등록된 업무가 없습니다."}
+                  {hasFilter ? t("yearlyCRM.noData") : t("yearlyCRM.noDataYear")}
                 </div>
               ) : (
                 groupedByTm1.map(row => (
@@ -404,7 +416,7 @@ export default function YearlyTaskBoardCRMPage() {
                           )}
                         </>
                       ) : (
-                        <div style={{ ...s.t1Name, color: "#94A3B8" }}>미분류</div>
+                        <div style={{ ...s.t1Name, color: "#94A3B8" }}>{t("common.unclassified")}</div>
                       )}
                     </div>
 
@@ -450,6 +462,13 @@ export default function YearlyTaskBoardCRMPage() {
 
 /* ═══════════════════════ 업무 카드 ═══════════════════════ */
 function TaskCard({ task, userMap, onClick }) {
+  const { t } = useLanguage();
+  const STATUS_LABEL = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
   const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["하"];
   const sc  = STATUS_COLOR[task.status]     || STATUS_COLOR["TODO"];
   const sl  = STATUS_LABEL[task.status]     || task.status;
@@ -469,13 +488,13 @@ function TaskCard({ task, userMap, onClick }) {
       <div style={s.cardDates}>
         {task.plannedEnd && (
           <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>완료예정</span>
+            <span style={s.dateLbl}>{t("common.dueDate")}</span>
             <span style={{ ...s.dateVal, color: "#2563EB" }}>{task.plannedEnd}</span>
           </div>
         )}
         {task.actualEnd && (
           <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>완&nbsp;&nbsp;&nbsp;료일</span>
+            <span style={s.dateLbl}>{t("common.completeDate")}</span>
             <span style={{ ...s.dateVal, color: "#16A34A", fontWeight: "600" }}>{task.actualEnd}</span>
           </div>
         )}
@@ -490,6 +509,13 @@ function TaskCard({ task, userMap, onClick }) {
 
 /* ═══════════════════════ 상세 팝업 ═══════════════════════ */
 function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
+  const { t } = useLanguage();
+  const STATUS_TEXT = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
   const [textCopied, setTextCopied] = useState(false);
   const hasIssue      = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
@@ -532,91 +558,91 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
     <div style={ms.overlay} onClick={onClose}>
       <div style={ms.modal} onClick={e => e.stopPropagation()}>
         <div style={ms.header}>
-          <span style={ms.title}>업무 상세</span>
+          <span style={ms.title}>{t("weekly.detail")}</span>
           <button style={ms.closeX} onClick={onClose}>✕</button>
         </div>
         <div style={ms.body}>
           <div style={ms.fullRow}>
-            <label style={ms.label}>제목</label>
+            <label style={ms.label}>{t("yearly.detail.title")}</label>
             <input style={inp} type="text" readOnly value={task.title} />
           </div>
           <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>등록일자</label>
+              <label style={ms.label}>{t("yearly.detail.regDate")}</label>
               <input style={inp} type="text" readOnly value={task.regDate} />
             </div>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>상태</label>
+              <label style={ms.label}>{t("yearly.detail.status")}</label>
               <input style={inp} type="text" readOnly value={STATUS_TEXT[task.status] || task.status} />
             </div>
           </div>
           <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분1</label>
+              <label style={ms.label}>{t("common.task1")}</label>
               <input style={inp} type="text" readOnly value={getTaskName(tm1, task.taskType1Cd)} />
             </div>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분2</label>
+              <label style={ms.label}>{t("common.task2")}</label>
               <input style={inp} type="text" readOnly value={getTaskName(tm2, task.taskType2Cd)} />
             </div>
           </div>
           <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분3</label>
+              <label style={ms.label}>{t("common.task3")}</label>
               <input style={inp} type="text" readOnly value={getTaskName(tm3, task.taskType3Cd)} />
             </div>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분4</label>
+              <label style={ms.label}>{t("common.task4")}</label>
               <input style={inp} type="text" readOnly value={getTaskName(tm4, task.taskType4Cd)} />
             </div>
           </div>
           <div style={ms.halfRow}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>중요도</label>
+              <label style={ms.label}>{t("yearly.detail.priority")}</label>
               <input style={inp} type="text" readOnly value={task.priority} />
             </div>
           </div>
           <div style={ms.fullRow}>
-            <label style={ms.label}>연관페이지링크</label>
+            <label style={ms.label}>{t("yearly.detail.link")}</label>
             <input style={inp} type="text" readOnly value={task.relatedLink} />
           </div>
           <div style={ms.fullRow}>
-            <label style={ms.label}>작업내용</label>
+            <label style={ms.label}>{t("yearly.detail.work")}</label>
             <textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.content} />
           </div>
           <div style={ms.fullRow}>
-            <label style={ms.label}>팀장공유내용</label>
+            <label style={ms.label}>{t("yearly.detail.teamNote")}</label>
             <textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.teamNote} />
           </div>
           <div style={ms.fullRow}>
-            <label style={ms.label}>이슈사항</label>
+            <label style={ms.label}>{t("yearly.detail.issue")}</label>
             <textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.issue} />
             {hasIssue && (
               <div style={ms.issueStatusRow}>
                 <span style={ms.issueStatusLabel}>이슈해결여부</span>
                 {issueResolved
-                  ? <span style={ms.issueStatusBadgeOk}>✅ Y (해결)</span>
-                  : <span style={ms.issueStatusBadgeNg}>🚨 N (미해결)</span>}
+                  ? <span style={ms.issueStatusBadgeOk}>{t("yearlyCRM.issue.resolved")}</span>
+                  : <span style={ms.issueStatusBadgeNg}>{t("yearlyCRM.issue.unresolved")}</span>}
               </div>
             )}
           </div>
           <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>작업완료예정일자</label>
+              <label style={ms.label}>{t("yearly.detail.dueDate")}</label>
               <input style={inp} type="text" readOnly value={task.plannedEnd} />
             </div>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>작업완료일자</label>
+              <label style={ms.label}>{t("yearly.detail.completeDate")}</label>
               <input style={inp} type="text" readOnly value={task.actualEnd} />
             </div>
           </div>
         </div>
         <div style={ms.footer}>
           <button style={textCopied ? ms.copyTextBtnDone : ms.copyTextBtn} onClick={handleCopyText}>
-            {textCopied ? "✅ 복사됨!" : "📄 텍스트 복사"}
+            {textCopied ? t("common.copied") : t("common.copy")}
           </button>
           <div style={ms.footerRight}>
-            <button style={ms.cancelBtn} onClick={onClose}>닫기</button>
+            <button style={ms.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           </div>
         </div>
       </div>

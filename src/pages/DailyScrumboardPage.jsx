@@ -2,14 +2,10 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────────────────── 상수 ─────────────────────────── */
-const COLUMNS = [
-  { id: "TODO",     label: "TO-DO",    color: "#64748B", light: "#F8FAFC" },
-  { id: "PROGRESS", label: "PROGRESS", color: "#2563EB", light: "#EFF6FF" },
-  { id: "HOLDING",  label: "HOLDING",  color: "#D97706", light: "#FFFBEB" },
-  { id: "COMPLETE", label: "COMPLETE", color: "#16A34A", light: "#F0FDF4" },
-];
+// COLUMNS는 컴포넌트 내부에서 t()를 사용해 정의됩니다.
 
 const PRIORITY_STYLES = {
   상:   { cardBg: "#FFFBF5", cardBorder: "#FDBA74", txt: "#C2410C", bg: "#FFEDD5" },
@@ -44,6 +40,13 @@ function fromDate8(s) {
 function DailyScrumboardPage() {
   const { user } = useAuth();
   const isMobile = useBreakpoint(768);
+  const { t } = useLanguage();
+  const COLUMNS = [
+    { id: "TODO",     label: t("common.todo"),       color: "#64748B", light: "#F8FAFC" },
+    { id: "PROGRESS", label: t("common.inProgress"), color: "#2563EB", light: "#EFF6FF" },
+    { id: "HOLDING",  label: t("common.holding"),    color: "#D97706", light: "#FFFBEB" },
+    { id: "COMPLETE", label: t("common.complete"),   color: "#16A34A", light: "#F0FDF4" },
+  ];
 
   const [tasks,     setTasks]     = useState([]);
   const [tm1,       setTm1]       = useState([]);
@@ -164,7 +167,7 @@ function DailyScrumboardPage() {
 
   /* ── 등록 ── */
   async function handleRegister() {
-    if (!regForm.title.trim()) { setRegErrors({ title: "제목을 입력해주세요." }); return; }
+    if (!regForm.title.trim()) { setRegErrors({ title: t("daily.modal.errTitle") }); return; }
     setRegLoading(true);
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const { error } = await supabase.from("TASK_BOARD").insert({
@@ -362,28 +365,28 @@ function DailyScrumboardPage() {
       <div style={s.topBar}>
         <h2 style={s.pageTitle}>Daily Scrumboard</h2>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button style={s.tm1ListBtn} onClick={() => setShowTm1Modal(true)}>☰ 업무구분1 List</button>
-          <button style={s.registerBtn} onClick={() => setIsRegOpen(true)}>+ 등록</button>
+          <button style={s.tm1ListBtn} onClick={() => setShowTm1Modal(true)}>{t("daily.tm1ListBtn")}</button>
+          <button style={s.registerBtn} onClick={() => setIsRegOpen(true)}>{t("daily.addBtn")}</button>
         </div>
       </div>
 
       {/* ── 조회 조건 ── */}
       <div style={isMobile ? s.searchBarMobile : s.searchBar}>
         <div style={isMobile ? s.searchFieldMobile : s.searchField}>
-          <label style={s.searchLabel}>업무구분1</label>
+          <label style={s.searchLabel}>{t("common.task1")}</label>
           <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchType1} onChange={(e) => setSearchType1(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
           </select>
         </div>
         <div style={isMobile ? s.searchFieldMobile : s.searchField}>
-          <label style={s.searchLabel}>등록자</label>
+          <label style={s.searchLabel}>{t("common.writer")}</label>
           <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchUserId} onChange={(e) => setSearchUserId(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {deptUsers.map((u) => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
           </select>
         </div>
-        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); }}>초기화</button>
+        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); }}>{t("common.reset")}</button>
       </div>
 
       {/* ── 칸반 보드 ── */}
@@ -418,7 +421,7 @@ function DailyScrumboardPage() {
             return (
               <div key={col.id} style={s.mobileCardList}>
                 {colTasks.length === 0 ? (
-                  <p style={s.emptyMsg}>항목 없음</p>
+                  <p style={s.emptyMsg}>{t("common.noItem")}</p>
                 ) : (
                   colTasks.map((task) => (
                     <TaskCard
@@ -456,7 +459,7 @@ function DailyScrumboardPage() {
                   >
                     {colTasks.length === 0 ? (
                       <p style={{ ...s.emptyMsg, ...(isOver ? s.emptyMsgOver : {}) }}>
-                        {isOver ? "여기에 놓기" : "항목 없음"}
+                        {isOver ? t("daily.dropHere") : t("common.noItem")}
                       </p>
                     ) : (
                       colTasks.map((task) => (
@@ -471,7 +474,7 @@ function DailyScrumboardPage() {
                       ))
                     )}
                     {isOver && colTasks.length > 0 && (
-                      <div style={s.dropIndicator}>여기에 놓기</div>
+                      <div style={s.dropIndicator}>{t("daily.dropHere")}</div>
                     )}
                   </div>
                 </div>
@@ -483,9 +486,9 @@ function DailyScrumboardPage() {
 
       {/* 등록 모달 */}
       {isRegOpen && (
-        <TaskModal title="업무 등록" form={regForm} setForm={setRegForm} errors={regErrors}
+        <TaskModal title={t("daily.modal.register")} form={regForm} setForm={setRegForm} errors={regErrors}
           tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} readOnly={false}
-          submitLabel={regLoading ? "등록 중..." : "등록"} submitDisabled={regLoading}
+          submitLabel={regLoading ? t("common.registering") : t("common.register")} submitDisabled={regLoading}
           onSubmit={handleRegister}
           onClose={() => { setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({}); }}
           onAddTaskMaster={handleAddTaskMaster}
@@ -496,10 +499,10 @@ function DailyScrumboardPage() {
       {/* 상세/수정 모달 */}
       {detailTask && editForm && (
         <TaskModal
-          title={isEditing ? "업무 수정" : "업무 상세"}
+          title={isEditing ? t("daily.modal.edit") : t("daily.modal.detail")}
           form={editForm} setForm={setEditForm} errors={{}}
           tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} readOnly={!isEditing}
-          submitLabel={isEditing ? (editLoading ? "저장 중..." : "저장") : "수정"}
+          submitLabel={isEditing ? (editLoading ? t("common.saving") : t("common.save")) : t("common.edit")}
           submitDisabled={editLoading}
           onSubmit={isEditing ? handleUpdate : () => setIsEditing(true)}
           onClose={isEditing ? cancelEdit : closeDetail}
@@ -526,6 +529,7 @@ function DailyScrumboardPage() {
 
 /* ═══════════════════════ 업무구분1 관리 팝업 ═══════════════════════ */
 function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
+  const { t } = useLanguage();
   const EMPTY = { TASK_ID: null, TASK_NAME: "", DEADLINE: "", OBJECTIVE: "", DESC: "" };
   const [selected,     setSelected]     = useState(null);   // TASK_ID
   const [form,         setForm]         = useState(EMPTY);
@@ -572,7 +576,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
   async function handleSave() {
     const errs = {};
-    if (!form.TASK_NAME.trim()) errs.TASK_NAME = "명칭을 입력해주세요.";
+    if (!form.TASK_NAME.trim()) errs.TASK_NAME = t("daily.tm1Modal.errName");
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setSaving(true);
     const coworkersStr = selUsers.map(u => u.NAME).join(", ");
@@ -605,7 +609,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
           .eq("TASK_ID", form.TASK_ID);
         if (error) throw error;
       }
-      setSavedMsg(mode === "new" ? "✅ 등록되었습니다." : "✅ 수정되었습니다.");
+      setSavedMsg(t("daily.tm1Modal.saved"));
       setTimeout(() => setSavedMsg(""), 2200);
       onSaved();
       setMode(null); setSelected(null); setForm(EMPTY); setSelUsers([]);
@@ -621,13 +625,13 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
       <div style={tm1s.modal} onClick={e => e.stopPropagation()}>
         {/* 헤더 */}
         <div style={tm1s.header}>
-          <span style={tm1s.title}>업무구분1 관리</span>
+          <span style={tm1s.title}>{t("daily.tm1Modal.title")}</span>
           <button style={tm1s.closeX} onClick={onClose}>✕</button>
         </div>
         <div style={tm1s.body}>
           {/* 왼쪽: 목록 */}
           <div style={tm1s.listPanel}>
-            <button style={tm1s.newBtn} onClick={openNew}>+ 신규 등록</button>
+            <button style={tm1s.newBtn} onClick={openNew}>{t("daily.tm1Modal.newBtn")}</button>
             <div style={tm1s.listScroll}>
               {tm1.length === 0 && (
                 <div style={tm1s.emptyList}>등록된 업무구분1이 없습니다.</div>
@@ -661,7 +665,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
                 <div style={tm1s.formBody}>
                   {/* 명칭 */}
                   <div style={tm1s.fieldWrap}>
-                    <label style={tm1s.label}>업무구분1 명칭 <span style={tm1s.req}>*</span></label>
+                    <label style={tm1s.label}>{t("daily.tm1Modal.taskName")} <span style={tm1s.req}>*</span></label>
                     <input
                       style={{ ...tm1s.input, ...(errors.TASK_NAME ? tm1s.inputErr : {}) }}
                       placeholder="업무구분1 명칭 입력"
@@ -673,7 +677,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
                   {/* 마감일 — 달력 선택 */}
                   <div style={tm1s.fieldWrap}>
-                    <label style={tm1s.label}>마감일</label>
+                    <label style={tm1s.label}>{t("daily.tm1Modal.deadline")}</label>
                     <input
                       type="date"
                       style={tm1s.inputDate}
@@ -684,7 +688,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
                   {/* 목적 */}
                   <div style={tm1s.fieldWrap}>
-                    <label style={tm1s.label}>목적</label>
+                    <label style={tm1s.label}>{t("daily.tm1Modal.objective")}</label>
                     <textarea
                       style={tm1s.textarea}
                       placeholder="업무 목적 입력"
@@ -695,7 +699,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
                   {/* 담당자 — 멀티 드롭다운 */}
                   <div style={tm1s.fieldWrap}>
-                    <label style={tm1s.label}>담당자</label>
+                    <label style={tm1s.label}>{t("daily.tm1Modal.coworkers")}</label>
                     <div style={{ position: "relative" }}>
                       <button
                         type="button"
@@ -704,7 +708,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
                       >
                         <span>
                           {selUsers.length === 0
-                            ? "담당자 선택"
+                            ? t("daily.tm1Modal.selectCoworkers")
                             : `${selUsers.length}명 선택됨`}
                         </span>
                         <span style={{ fontSize: "10px", color: "#94A3B8" }}>{showUserDrop ? "▲" : "▼"}</span>
@@ -713,7 +717,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
                       {showUserDrop && (
                         <div style={tm1s.userDropList}>
                           {deptUsers.length === 0 && (
-                            <div style={tm1s.userDropEmpty}>부서 사용자가 없습니다.</div>
+                            <div style={tm1s.userDropEmpty}>{t("daily.tm1Modal.noUsers")}</div>
                           )}
                           {deptUsers.map(u => {
                             const checked = selUsers.some(x => x.ID === u.ID);
@@ -753,7 +757,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
                   {/* 설명 */}
                   <div style={tm1s.fieldWrap}>
-                    <label style={tm1s.label}>설명</label>
+                    <label style={tm1s.label}>{t("daily.tm1Modal.desc")}</label>
                     <textarea
                       style={tm1s.textarea}
                       placeholder="설명 입력"
@@ -765,14 +769,14 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
                 <div style={tm1s.formFooter}>
                   <button style={tm1s.cancelBtn} onClick={() => { setMode(null); setSelected(null); setErrors({}); setShowUserDrop(false); }}>
-                    취소
+                    {t("common.close")}
                   </button>
                   <button
                     style={saving ? tm1s.saveBtnDisabled : tm1s.saveBtn}
                     onClick={handleSave}
                     disabled={saving}
                   >
-                    {saving ? "저장 중..." : "저장"}
+                    {saving ? t("common.saving") : t("common.save")}
                   </button>
                 </div>
               </>
@@ -944,10 +948,12 @@ function TaskMasterSelect({ value, options, readOnly, onChange, onDelete }) {
 const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", COMPLETE: "COMPLETE" };
 
 function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
-                     submitLabel, submitDisabled, onSubmit, onClose, closeLabel = "취소",
+                     submitLabel, submitDisabled, onSubmit, onClose, closeLabel,
                      onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, deptUsers = [] }) {
+  const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
+  const resolvedCloseLabel = closeLabel ?? t("common.close");
 
   // 업무구분 신규 등록 미니 팝업
   const [addTmLevel,      setAddTmLevel]      = useState(null); // null | "1" | "2"
@@ -1309,11 +1315,11 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
               style={textCopied ? ms.copyTextBtnDone : ms.copyTextBtn}
               onClick={handleCopyText}
             >
-              {textCopied ? "✅ 복사됨!" : "📄 텍스트 복사"}
+              {textCopied ? t("common.copied") : t("common.copy")}
             </button>
           )}
           <div style={ms.footerRight}>
-            <button style={ms.cancelBtn} onClick={onClose}>{closeLabel}</button>
+            <button style={ms.cancelBtn} onClick={onClose}>{resolvedCloseLabel}</button>
             <button style={ms.submitBtn} onClick={onSubmit} disabled={submitDisabled}>{submitLabel}</button>
           </div>
         </div>

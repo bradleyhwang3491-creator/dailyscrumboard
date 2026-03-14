@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 import { logout } from "../utils/auth";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import UserManagementPage from "./UserManagementPage";
@@ -11,22 +12,106 @@ import YearlyTaskBoardCRMPage from "./YearlyTaskBoardCRMPage";
 import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
 import CommunicationBoardPage from "./CommunicationBoardPage";
 
-const MENU_ITEMS = [
-  { id: "dashboard",        label: "Communication Board",    emoji: "◈" },
-  { id: "scrumboard",       label: "Daily Scrumboard",       emoji: "▦" },
-  { id: "yearly-board",     label: "Yearly Task Board",      emoji: "◻" },
-  { id: "yearly-board-crm", label: "Yearly Task Board(CRM)", emoji: "◈", crmOnly: true },
-  { id: "weekly-board",     label: "Weekly Task Board",      emoji: "▤" },
-  { id: "ai-report",        label: "AI Weekly Report",       emoji: "◉" },
-  { id: "user-mgmt",        label: "사용자 정보 관리",        emoji: "◎", adminOnly: true },
-];
-
 const ADMIN_ID = "SUNGHYUN_HWANG";
 const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
 
+/* ── 언어 선택 드롭다운 ────────────────────────────── */
+function LangDropdown() {
+  const { lang, setLang, t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const options = [
+    { value: "ko", label: t("lang.ko") },
+    { value: "en", label: t("lang.en") },
+  ];
+
+  return (
+    <div ref={ref} style={ls.wrap}>
+      <button style={ls.btn} onClick={() => setOpen((v) => !v)}>
+        🌐 {options.find((o) => o.value === lang)?.label}
+        <span style={ls.caret}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={ls.dropdown}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              style={{
+                ...ls.option,
+                ...(lang === o.value ? ls.optionActive : {}),
+              }}
+              onClick={() => { setLang(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ls = {
+  wrap: { position: "relative" },
+  btn: {
+    fontFamily: "'Pretendard', sans-serif",
+    fontSize: "13px",
+    fontWeight: "400",
+    color: "#5A5A5A",
+    backgroundColor: "transparent",
+    border: "1px solid #D9D9D9",
+    borderRadius: "5px",
+    padding: "6px 10px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    whiteSpace: "nowrap",
+  },
+  caret: { fontSize: "10px", color: "#94A3B8" },
+  dropdown: {
+    position: "absolute",
+    top: "calc(100% + 4px)",
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #E8E8E8",
+    borderRadius: "6px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+    zIndex: 500,
+    minWidth: "110px",
+    overflow: "hidden",
+  },
+  option: {
+    fontFamily: "'Pretendard', sans-serif",
+    fontSize: "13px",
+    color: "#2F2F2F",
+    backgroundColor: "transparent",
+    border: "none",
+    width: "100%",
+    textAlign: "left",
+    padding: "10px 14px",
+    cursor: "pointer",
+  },
+  optionActive: {
+    backgroundColor: "#F4F4F4",
+    fontWeight: "600",
+  },
+};
+
+/* ── MainPage ───────────────────────────────────────── */
 function MainPage() {
   const navigate = useNavigate();
   const { user, setUser } = useAuth();
+  const { t } = useLanguage();
   const isMobile = useBreakpoint(768);
 
   const [activeMenu,  setActiveMenu]  = useState(null);
@@ -34,6 +119,17 @@ function MainPage() {
 
   const deptNm = user?.deptNm ?? "";
   const name   = user?.name   ?? "";
+
+  /* 메뉴 아이템 — label은 t()로 언어 반영 */
+  const MENU_ITEMS = [
+    { id: "dashboard",        label: t("nav.menus.communicationBoard"),    emoji: "◈" },
+    { id: "scrumboard",       label: t("nav.menus.dailyScrumboard"),       emoji: "▦" },
+    { id: "yearly-board",     label: t("nav.menus.yearlyTaskBoard"),       emoji: "◻" },
+    { id: "yearly-board-crm", label: t("nav.menus.yearlyTaskBoardCRM"),   emoji: "◈", crmOnly: true },
+    { id: "weekly-board",     label: t("nav.menus.weeklyTaskBoard"),       emoji: "▤" },
+    { id: "ai-report",        label: t("nav.menus.aiWeeklyReport"),        emoji: "◉" },
+    { id: "user-mgmt",        label: t("nav.menus.userManagement"),        emoji: "◎", adminOnly: true },
+  ];
 
   function handleLogout() {
     logout();
@@ -46,7 +142,7 @@ function MainPage() {
     setSidebarOpen(false);
   }
 
-  /* 사이드바 (데스크탑: 고정 / 모바일: 슬라이드 오버레이) */
+  /* 사이드바 */
   const sidebarEl = (
     <nav
       style={{
@@ -57,11 +153,11 @@ function MainPage() {
     >
       {isMobile && (
         <div style={styles.sidebarMobileHeader}>
-          <span style={styles.sidebarMobileTitle}>메뉴</span>
+          <span style={styles.sidebarMobileTitle}>{t("nav.menu")}</span>
           <button
             style={styles.sidebarCloseBtn}
             onClick={() => setSidebarOpen(false)}
-            aria-label="메뉴 닫기"
+            aria-label={t("nav.closeMenu")}
           >
             ✕
           </button>
@@ -69,16 +165,14 @@ function MainPage() {
       )}
 
       {MENU_ITEMS.map((item) => {
-        // CRM 전용 메뉴: 허용된 사용자가 아니면 아예 렌더링 안 함
         if (item.crmOnly && !CRM_USER_IDS.includes(user?.id)) return null;
-
         const disabled = item.adminOnly && user?.id !== ADMIN_ID;
         return (
           <button
             key={item.id}
             disabled={disabled}
             onClick={() => !disabled && handleMenuClick(item.id)}
-            title={disabled ? "관리자만 접근 가능한 메뉴입니다." : undefined}
+            title={disabled ? t("nav.adminOnly") : undefined}
             style={{
               ...styles.menuItem,
               ...(activeMenu === item.id ? styles.menuItemActive : {}),
@@ -97,7 +191,6 @@ function MainPage() {
 
   return (
     <div style={styles.page}>
-      {/* 모바일 오버레이 (사이드바 뒤 어둡게) */}
       {isMobile && sidebarOpen && (
         <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
       )}
@@ -109,7 +202,7 @@ function MainPage() {
             <button
               style={styles.hamburgerBtn}
               onClick={() => setSidebarOpen(true)}
-              aria-label="메뉴 열기"
+              aria-label={t("nav.openMenu")}
             >
               <span style={styles.hamburgerLine} />
               <span style={styles.hamburgerLine} />
@@ -117,7 +210,7 @@ function MainPage() {
             </button>
           )}
           <span style={isMobile ? styles.serviceNameMobile : styles.serviceName}>
-            {isMobile ? "SCRUM BOARD" : "SCRUM MEETING, WORK TOGETHER"}
+            {isMobile ? t("nav.titleMobile") : t("nav.title")}
           </span>
         </div>
 
@@ -125,8 +218,10 @@ function MainPage() {
           {!isMobile && (
             <span style={styles.userLabel}>{deptNm}_{name}</span>
           )}
+          {/* 언어 선택 드롭다운 */}
+          <LangDropdown />
           <button onClick={handleLogout} style={styles.logoutButton}>
-            로그아웃
+            {t("common.logout")}
           </button>
         </div>
       </header>
@@ -136,7 +231,6 @@ function MainPage() {
         {sidebarEl}
 
         <main style={isMobile ? styles.contentMobile : styles.content}>
-          {/* 모바일: 현재 메뉴명 + 사용자 */}
           {isMobile && (
             <div style={styles.mobileTopBar}>
               <span style={styles.mobileMenuLabel}>
@@ -163,10 +257,10 @@ function MainPage() {
           ) : (
             <div style={styles.contentArea}>
               {activeMenu ? (
-                <p style={styles.comingSoon}>아직 개발 준비중입니다.</p>
+                <p style={styles.comingSoon}>{t("nav.developing")}</p>
               ) : (
                 <p style={styles.placeholder}>
-                  {isMobile ? "☰ 상단 버튼으로 메뉴를 선택해주세요." : "좌측 메뉴를 선택해주세요."}
+                  {isMobile ? t("nav.selectMenuMobile") : t("nav.selectMenuDesktop")}
                 </p>
               )}
             </div>
@@ -185,8 +279,6 @@ const styles = {
     display: "flex",
     flexDirection: "column",
   },
-
-  /* ── 헤더 ── */
   header: {
     display: "flex",
     alignItems: "center",
@@ -217,7 +309,7 @@ const styles = {
   headerRight: {
     display: "flex",
     alignItems: "center",
-    gap: "12px",
+    gap: "8px",
   },
   userLabel: {
     fontSize: "13px",
@@ -235,8 +327,6 @@ const styles = {
     padding: "6px 12px",
     cursor: "pointer",
   },
-
-  /* ── 햄버거 버튼 ── */
   hamburgerBtn: {
     display: "flex",
     flexDirection: "column",
@@ -257,23 +347,17 @@ const styles = {
     backgroundColor: "#2F2F2F",
     borderRadius: "2px",
   },
-
-  /* ── 바디 ── */
   body: {
     display: "flex",
     flex: 1,
     overflow: "hidden",
   },
-
-  /* ── 오버레이 ── */
   overlay: {
     position: "fixed",
     inset: 0,
     backgroundColor: "rgba(0,0,0,0.4)",
     zIndex: 299,
   },
-
-  /* ── 사이드바 (데스크탑) ── */
   sidebar: {
     width: "220px",
     flexShrink: 0,
@@ -284,8 +368,6 @@ const styles = {
     flexDirection: "column",
     gap: "2px",
   },
-
-  /* ── 사이드바 (모바일 슬라이드) ── */
   sidebarMobile: {
     position: "fixed",
     top: 0,
@@ -324,8 +406,6 @@ const styles = {
     padding: "4px",
     lineHeight: 1,
   },
-
-  /* ── 메뉴 아이템 ── */
   menuItem: {
     position: "relative",
     fontFamily: "'Pretendard', sans-serif",
@@ -371,8 +451,6 @@ const styles = {
     backgroundColor: "#3A3A3A",
     borderRadius: "0 2px 2px 0",
   },
-
-  /* ── 콘텐츠 ── */
   content: {
     flex: 1,
     padding: "32px",
@@ -385,8 +463,6 @@ const styles = {
     minWidth: 0,
     overflowY: "auto",
   },
-
-  /* ── 모바일 상단 바 ── */
   mobileTopBar: {
     display: "flex",
     alignItems: "center",
@@ -402,8 +478,6 @@ const styles = {
     fontSize: "12px",
     color: "#94A3B8",
   },
-
-  /* ── 빈 화면 ── */
   contentArea: {
     backgroundColor: "#FFFFFF",
     borderRadius: "8px",

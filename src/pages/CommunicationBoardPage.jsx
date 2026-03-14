@@ -1,16 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
-
-/* ─────────────── 섹션 정의 ─────────────── */
-const SECTIONS = [
-  { id: "received", title: "내가 받은 요청", sub: "Requests Received", accent: "#3B82F6", emptyMsg: "받은 요청이 없습니다.", emptyIcon: "inbox" },
-  { id: "sent",     title: "내가 한 요청",   sub: "Requests Sent",     accent: "#10B981", emptyMsg: "한 요청이 없습니다.",   emptyIcon: "send"  },
-  { id: "manager",  title: "팀장 요청내용",  sub: "Manager Requests",  accent: "#8B5CF6", emptyMsg: "팀장 요청내용이 없습니다.", emptyIcon: "clipboard" },
-  { id: "issue",    title: "이슈내용",       sub: "Issues",            accent: "#EF4444", emptyMsg: "등록된 이슈가 없습니다.", emptyIcon: "alert" },
-];
-
-const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "진행중", HOLDING: "보류", COMPLETE: "완료" };
+import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 날짜 헬퍼 ─────────────── */
 function fromDate8(s) {
@@ -115,10 +106,10 @@ function EmptyState({ sec }) {
 }
 
 /* ─────────────── 로딩 스피너 ─────────────── */
-function LoadingState() {
+function LoadingState({ label }) {
   return (
     <div style={s.emptyState}>
-      <div style={{ fontSize: "12px", color: "#94A3B8", fontWeight: "500" }}>불러오는 중...</div>
+      <div style={{ fontSize: "12px", color: "#94A3B8", fontWeight: "500" }}>{label}</div>
     </div>
   );
 }
@@ -243,6 +234,22 @@ function IssueItem({ task, userMap, onClick }) {
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 export default function CommunicationBoardPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
+
+  const SECTIONS = [
+    { id: "received", title: t("comm.received"),   sub: "Requests Received", accent: "#3B82F6", emptyMsg: t("comm.noReceived"),   emptyIcon: "inbox" },
+    { id: "sent",     title: t("comm.sent"),        sub: "Requests Sent",     accent: "#10B981", emptyMsg: t("comm.noSent"),        emptyIcon: "send"  },
+    { id: "manager",  title: t("comm.managerReq"),  sub: "Manager Requests",  accent: "#8B5CF6", emptyMsg: t("comm.noManagerReq"), emptyIcon: "clipboard" },
+    { id: "issue",    title: t("comm.issues"),      sub: "Issues",            accent: "#EF4444", emptyMsg: t("comm.noIssues"),     emptyIcon: "alert" },
+  ];
+
+  const STATUS_TEXT = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
+
   const [hovered,          setHovered]          = useState(null);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showReplyModal,   setShowReplyModal]   = useState(false);
@@ -364,7 +371,7 @@ export default function CommunicationBoardPage() {
 
   function renderCardBody(sec) {
     if (sec.id === "received") {
-      if (loadingReceived) return <LoadingState />;
+      if (loadingReceived) return <LoadingState label={t("common.loading")} />;
       if (received.length === 0) return <EmptyState sec={sec} />;
       return received.map(item => (
         <ReceivedItem
@@ -376,21 +383,21 @@ export default function CommunicationBoardPage() {
       ));
     }
     if (sec.id === "sent") {
-      if (loadingSent) return <LoadingState />;
+      if (loadingSent) return <LoadingState label={t("common.loading")} />;
       if (sent.length === 0) return <EmptyState sec={sec} />;
       return sent.map(item => (
         <SentItem key={item.TASK_REQUEST_ID} item={item} userMap={userMap} />
       ));
     }
     if (sec.id === "manager") {
-      if (loadingBoard) return <LoadingState />;
+      if (loadingBoard) return <LoadingState label={t("common.loading")} />;
       if (managerItems.length === 0) return <EmptyState sec={sec} />;
       return managerItems.map(t => (
         <ManagerItem key={t.id} task={t} userMap={userMap} onClick={() => setSelectedTask(t)} />
       ));
     }
     if (sec.id === "issue") {
-      if (loadingBoard) return <LoadingState />;
+      if (loadingBoard) return <LoadingState label={t("common.loading")} />;
       if (issueItems.length === 0) return <EmptyState sec={sec} />;
       return issueItems.map(t => (
         <IssueItem key={t.id} task={t} userMap={userMap} onClick={() => setSelectedTask(t)} />
@@ -536,6 +543,7 @@ export default function CommunicationBoardPage() {
 
 /* ═══════════════════════ 업무 상세 팝업 (읽기전용) ═══════════════════════ */
 function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
+  const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const hasIssue      = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
@@ -667,7 +675,7 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
             {textCopied ? "✅ 복사됨!" : "📄 텍스트 복사"}
           </button>
           <div style={vs.footerRight}>
-            <button style={vs.cancelBtn} onClick={onClose}>닫기</button>
+            <button style={vs.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           </div>
         </div>
       </div>
@@ -677,6 +685,7 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
 
 /* ═══════════════════════ 답변 팝업 ═══════════════════════ */
 function ReplyModal({ item, userMap, onClose, onSuccess }) {
+  const { t } = useLanguage();
   const [reply,      setReply]      = useState(item.REPLY_CONTEXT ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [error,      setError]      = useState("");
@@ -732,13 +741,13 @@ function ReplyModal({ item, userMap, onClose, onSuccess }) {
           </div>
         </div>
         <div style={ms.footer}>
-          <button style={ms.cancelBtn} onClick={onClose}>취소</button>
+          <button style={ms.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           <button
             style={{ ...ms.submitBtn, opacity: submitting ? 0.7 : 1 }}
             disabled={submitting}
             onClick={handleSubmit}
           >
-            {submitting ? "저장 중..." : "답변 저장"}
+            {submitting ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </div>
@@ -748,6 +757,7 @@ function ReplyModal({ item, userMap, onClose, onSuccess }) {
 
 /* ═══════════════════════ 업무 요청 팝업 ═══════════════════════ */
 function RequestModal({ user, onClose, onSuccess }) {
+  const { t } = useLanguage();
   const [form,       setForm]       = useState({ title: "", toUserId: "", toUserName: "", context: "" });
   const [errors,     setErrors]     = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -908,9 +918,9 @@ function RequestModal({ user, onClose, onSuccess }) {
           {errors.submit && <p style={{ ...ms.err, marginTop: 0 }}>{errors.submit}</p>}
         </div>
         <div style={ms.footer}>
-          <button style={ms.cancelBtn} onClick={onClose}>취소</button>
+          <button style={ms.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           <button style={{ ...ms.submitBtn, opacity: submitting ? 0.7 : 1 }} disabled={submitting} onClick={handleSubmit}>
-            {submitting ? "저장 중..." : "저장"}
+            {submitting ? t("common.saving") : t("common.save")}
           </button>
         </div>
       </div>

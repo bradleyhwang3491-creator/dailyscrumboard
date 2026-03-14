@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 상수 ─────────────── */
 const FIRST_W   = 180;
 const WEEK_W    = 260;   // 주차별 컬럼 너비
 const DAY_W     = 155;   // 일자별 컬럼 너비
 const TODAY     = new Date();
-const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTH_NAMES = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
 const PRIORITY_STYLE = {
@@ -17,8 +17,6 @@ const PRIORITY_STYLE = {
   긴급: { color: "#DC2626", background: "#FEE2E2" },
 };
 const STATUS_COLOR = { TODO: "#94A3B8", PROGRESS: "#3B82F6", HOLDING: "#F59E0B", COMPLETE: "#22C55E" };
-const STATUS_LABEL = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류",    COMPLETE: "완료"   };
-const STATUS_TEXT  = { TODO: "TO-DO",   PROGRESS: "진행중",  HOLDING: "보류",    COMPLETE: "완료"   };
 
 /* ── 사용자별 고유 색상 팔레트 ── */
 const USER_COLORS = [
@@ -109,6 +107,20 @@ function todayWeekOfMonth() {
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 export default function WeeklyTaskBoardPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
+  const DAY_NAMES = t("weekly.days");
+  const STATUS_LABEL = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
+  const STATUS_TEXT = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
 
   const [tasks,        setTasks]        = useState([]);
   const [tm1,          setTm1]          = useState([]);
@@ -321,13 +333,13 @@ export default function WeeklyTaskBoardPage() {
               style={{ ...s.toggleBtn, ...(viewMode === "week" ? s.toggleActive : {}) }}
               onClick={() => setViewMode("week")}
             >
-              주차별
+              {t("weekly.viewWeek")}
             </button>
             <button
               style={{ ...s.toggleBtn, ...(viewMode === "day" ? s.toggleActive : {}) }}
               onClick={() => setViewMode("day")}
             >
-              일자별
+              {t("weekly.viewDay")}
             </button>
           </div>
         </div>
@@ -336,21 +348,21 @@ export default function WeeklyTaskBoardPage() {
       {/* ── 조회 조건 ── */}
       <div style={s.filterBar}>
         <div style={s.filterField}>
-          <span style={s.filterLabel}>업무구분1</span>
+          <span style={s.filterLabel}>{t("common.task1")}</span>
           <select style={s.filterSelect} value={filterTm1} onChange={e => setFilterTm1(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {tm1.map(t => <option key={t.TASK_ID} value={String(t.TASK_ID)}>{t.TASK_NAME}</option>)}
           </select>
         </div>
         <div style={s.filterField}>
-          <span style={s.filterLabel}>등록자</span>
+          <span style={s.filterLabel}>{t("common.writer")}</span>
           <select style={s.filterSelect} value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-            <option value="">전체</option>
+            <option value="">{t("common.all")}</option>
             {uniqueRegistrants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
         {hasFilter && (
-          <button style={s.resetBtn} onClick={() => { setFilterTm1(""); setFilterUser(""); }}>초기화</button>
+          <button style={s.resetBtn} onClick={() => { setFilterTm1(""); setFilterUser(""); }}>{t("common.reset")}</button>
         )}
       </div>
 
@@ -367,7 +379,7 @@ export default function WeeklyTaskBoardPage() {
                 style={{ ...s.weekTab, ...(act ? s.weekTabActive : {}), ...(cur && !act ? s.weekTabCurrent : {}) }}
                 onClick={() => setSelectedWeek(w)}
               >
-                <span style={s.weekTabLabel}>{w}주차</span>
+                <span style={s.weekTabLabel}>{w}{t("weekly.week")}</span>
                 {range && <span style={s.weekTabRange}>{range}</span>}
                 {cur && <span style={s.weekTabTodayDot} />}
               </button>
@@ -377,14 +389,14 @@ export default function WeeklyTaskBoardPage() {
       )}
 
       {loading ? (
-        <div style={s.loadingBox}>데이터를 불러오는 중...</div>
+        <div style={s.loadingBox}>{t("common.loading")}</div>
       ) : (
         <div style={s.tableOuter}>
           <div style={{ minWidth: totalW }}>
 
             {/* ── 헤더 행 ── */}
             <div style={s.headerRow}>
-              <div style={{ ...s.th, ...s.thFirst }}>업무구분1 LIST</div>
+              <div style={{ ...s.th, ...s.thFirst }}>{t("weekly.task1List")}</div>
 
               {/* 주차별 헤더 */}
               {viewMode === "week" && WEEKS.map(w => {
@@ -394,7 +406,7 @@ export default function WeeklyTaskBoardPage() {
                 return (
                   <div key={w} style={{ ...s.th, ...(cur ? s.thCurrent : cnt > 0 ? s.thHasData : {}) }}>
                     <div style={s.thInner}>
-                      <span style={cur ? s.thLabelCur : s.thLabel}>{w}주차</span>
+                      <span style={cur ? s.thLabelCur : s.thLabel}>{w}{t("weekly.week")}</span>
                       {range && <span style={{ ...s.thRange, ...(cur ? s.thRangeCur : {}) }}>{range}</span>}
                     </div>
                     {cnt > 0 && <span style={{ ...s.colCnt, ...(cur ? s.colCntCur : {}) }}>{cnt}</span>}
@@ -440,7 +452,7 @@ export default function WeeklyTaskBoardPage() {
             {/* ── 데이터 행 ── */}
             {tableRows.length === 0 ? (
               <div style={s.emptyBox}>
-                {hasFilter ? "조회 조건에 해당하는 업무가 없습니다." : "해당 기간에 등록된 업무가 없습니다."}
+                {hasFilter ? t("weekly.noData") : t("weekly.noDataPeriod")}
               </div>
             ) : (
               tableRows.map(row => (
@@ -455,7 +467,7 @@ export default function WeeklyTaskBoardPage() {
                         {row.tm1Item.DEADLINE  && <div style={s.t1Row}><span style={s.t1Lbl}>마감</span><span style={{ ...s.t1Val, color: "#B45309", fontWeight: "600" }}>{row.tm1Item.DEADLINE}</span></div>}
                       </>
                     ) : (
-                      <div style={{ ...s.t1Name, color: "#64748B" }}>미분류</div>
+                      <div style={{ ...s.t1Name, color: "#64748B" }}>{t("common.unclassified")}</div>
                     )}
                   </div>
 
@@ -512,6 +524,13 @@ export default function WeeklyTaskBoardPage() {
 
 /* ═══════════════════════ 업무 카드 ═══════════════════════ */
 function TaskCard({ task, userMap, onClick }) {
+  const { t } = useLanguage();
+  const STATUS_LABEL = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
   const ps  = PRIORITY_STYLE[task.priority] || PRIORITY_STYLE["하"];
   const sc  = STATUS_COLOR[task.status]     || STATUS_COLOR["TODO"];
   const sl  = STATUS_LABEL[task.status]     || task.status;
@@ -531,13 +550,13 @@ function TaskCard({ task, userMap, onClick }) {
       <div style={s.cardDates}>
         {task.plannedEnd && (
           <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>완료예정</span>
+            <span style={s.dateLbl}>{t("common.dueDate")}</span>
             <span style={{ ...s.dateVal, color: "#2563EB" }}>{task.plannedEnd}</span>
           </div>
         )}
         {task.actualEnd && (
           <div style={s.cardDateRow}>
-            <span style={s.dateLbl}>완&nbsp;&nbsp;&nbsp;료일</span>
+            <span style={s.dateLbl}>{t("common.completeDate")}</span>
             <span style={{ ...s.dateVal, color: "#16A34A", fontWeight: "600" }}>{task.actualEnd}</span>
           </div>
         )}
@@ -552,6 +571,13 @@ function TaskCard({ task, userMap, onClick }) {
 
 /* ═══════════════════════ 상세 팝업 ═══════════════════════ */
 function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
+  const { t } = useLanguage();
+  const STATUS_TEXT = {
+    TODO:     t("common.todo"),
+    PROGRESS: t("common.inProgress"),
+    HOLDING:  t("common.holding"),
+    COMPLETE: t("common.complete"),
+  };
   const [textCopied, setTextCopied] = useState(false);
   const hasIssue      = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
@@ -593,31 +619,31 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
     <div style={ms.overlay} onClick={onClose}>
       <div style={ms.modal} onClick={e => e.stopPropagation()}>
         <div style={ms.header}>
-          <span style={ms.title}>업무 상세</span>
+          <span style={ms.title}>{t("weekly.detail")}</span>
           <button style={ms.closeX} onClick={onClose}>✕</button>
         </div>
         <div style={ms.body}>
-          <div style={ms.fullRow}><label style={ms.label}>제목</label><input style={inp} type="text" readOnly value={task.title} /></div>
+          <div style={ms.fullRow}><label style={ms.label}>{t("yearly.detail.title")}</label><input style={inp} type="text" readOnly value={task.title} /></div>
           <div style={ms.twoCol}>
-            <div style={ms.fieldWrap}><label style={ms.label}>등록일자</label><input style={inp} type="text" readOnly value={task.regDate} /></div>
-            <div style={ms.fieldWrap}><label style={ms.label}>상태</label><input style={inp} type="text" readOnly value={STATUS_TEXT[task.status] || task.status} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("yearly.detail.regDate")}</label><input style={inp} type="text" readOnly value={task.regDate} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("yearly.detail.status")}</label><input style={inp} type="text" readOnly value={STATUS_TEXT[task.status] || task.status} /></div>
           </div>
           <div style={ms.twoCol}>
-            <div style={ms.fieldWrap}><label style={ms.label}>업무구분1</label><input style={inp} type="text" readOnly value={getTaskName(tm1, task.taskType1Cd)} /></div>
-            <div style={ms.fieldWrap}><label style={ms.label}>업무구분2</label><input style={inp} type="text" readOnly value={getTaskName(tm2, task.taskType2Cd)} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("common.task1")}</label><input style={inp} type="text" readOnly value={getTaskName(tm1, task.taskType1Cd)} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("common.task2")}</label><input style={inp} type="text" readOnly value={getTaskName(tm2, task.taskType2Cd)} /></div>
           </div>
           <div style={ms.twoCol}>
-            <div style={ms.fieldWrap}><label style={ms.label}>업무구분3</label><input style={inp} type="text" readOnly value={getTaskName(tm3, task.taskType3Cd)} /></div>
-            <div style={ms.fieldWrap}><label style={ms.label}>업무구분4</label><input style={inp} type="text" readOnly value={getTaskName(tm4, task.taskType4Cd)} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("common.task3")}</label><input style={inp} type="text" readOnly value={getTaskName(tm3, task.taskType3Cd)} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("common.task4")}</label><input style={inp} type="text" readOnly value={getTaskName(tm4, task.taskType4Cd)} /></div>
           </div>
           <div style={ms.halfRow}>
-            <div style={ms.fieldWrap}><label style={ms.label}>중요도</label><input style={inp} type="text" readOnly value={task.priority} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("yearly.detail.priority")}</label><input style={inp} type="text" readOnly value={task.priority} /></div>
           </div>
-          <div style={ms.fullRow}><label style={ms.label}>연관페이지링크</label><input style={inp} type="text" readOnly value={task.relatedLink} /></div>
-          <div style={ms.fullRow}><label style={ms.label}>작업내용</label><textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.content} /></div>
-          <div style={ms.fullRow}><label style={ms.label}>팀장공유내용</label><textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.teamNote} /></div>
+          <div style={ms.fullRow}><label style={ms.label}>{t("yearly.detail.link")}</label><input style={inp} type="text" readOnly value={task.relatedLink} /></div>
+          <div style={ms.fullRow}><label style={ms.label}>{t("yearly.detail.work")}</label><textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.content} /></div>
+          <div style={ms.fullRow}><label style={ms.label}>{t("yearly.detail.teamNote")}</label><textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.teamNote} /></div>
           <div style={ms.fullRow}>
-            <label style={ms.label}>이슈사항</label>
+            <label style={ms.label}>{t("yearly.detail.issue")}</label>
             <textarea style={{ ...ms.textarea, ...ms.inputRO }} readOnly value={task.issue} />
             {hasIssue && (
               <div style={ms.issueStatusRow}>
@@ -629,16 +655,16 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
             )}
           </div>
           <div style={ms.twoCol}>
-            <div style={ms.fieldWrap}><label style={ms.label}>작업완료예정일자</label><input style={inp} type="text" readOnly value={task.plannedEnd} /></div>
-            <div style={ms.fieldWrap}><label style={ms.label}>작업완료일자</label><input style={inp} type="text" readOnly value={task.actualEnd} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("yearly.detail.dueDate")}</label><input style={inp} type="text" readOnly value={task.plannedEnd} /></div>
+            <div style={ms.fieldWrap}><label style={ms.label}>{t("yearly.detail.completeDate")}</label><input style={inp} type="text" readOnly value={task.actualEnd} /></div>
           </div>
         </div>
         <div style={ms.footer}>
           <button style={textCopied ? ms.copyTextBtnDone : ms.copyTextBtn} onClick={handleCopyText}>
-            {textCopied ? "✅ 복사됨!" : "📄 텍스트 복사"}
+            {textCopied ? t("common.copied") : t("common.copy")}
           </button>
           <div style={ms.footerRight}>
-            <button style={ms.cancelBtn} onClick={onClose}>닫기</button>
+            <button style={ms.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           </div>
         </div>
       </div>

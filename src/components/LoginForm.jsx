@@ -1,40 +1,31 @@
 import { useState } from "react";
 import { login } from "../utils/auth";
+import { useLanguage } from "../context/LanguageContext";
 
-/**
- * LoginForm 컴포넌트
- * 아이디/비밀번호 입력, 유효성 검사, SCRUMBOARD_USER 테이블 인증 처리를 담당합니다.
- *
- * @param {{ onLoginSuccess: (user: object) => void }} props
- */
 function LoginForm({ onLoginSuccess }) {
+  const { t } = useLanguage();
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  /** 필드 단위 유효성 검사 */
   function validate() {
     const newErrors = {};
-    if (!id.trim()) newErrors.id = "아이디를 입력해주세요.";
-    if (!password.trim()) newErrors.password = "비밀번호를 입력해주세요.";
+    if (!id.trim())       newErrors.id       = t("login.idRequired");
+    if (!password.trim()) newErrors.password = t("login.pwRequired");
     return newErrors;
   }
 
-  /** 로그인 버튼 클릭 또는 엔터 키 제출 */
   async function handleSubmit(e) {
     e.preventDefault();
-
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       return;
     }
-
     setIsLoading(true);
     const result = await login(id, password);
     setIsLoading(false);
-
     if (result.success) {
       onLoginSuccess(result.user);
     } else {
@@ -44,10 +35,8 @@ function LoginForm({ onLoginSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate style={styles.form}>
-      {/* 서비스명 */}
-      <h1 style={styles.title}>SCRUM MEETING,<br />WORK TOGETHER</h1>
+      <h1 style={styles.title}>{t("login.title").replace(",", ",\n")}</h1>
 
-      {/* 아이디 입력 */}
       <div style={styles.fieldGroup}>
         <input
           type="text"
@@ -56,7 +45,7 @@ function LoginForm({ onLoginSuccess }) {
             setId(e.target.value);
             setErrors((prev) => ({ ...prev, id: undefined, auth: undefined }));
           }}
-          placeholder="아이디를 입력하세요"
+          placeholder={t("login.idPlaceholder")}
           autoComplete="username"
           disabled={isLoading}
           style={{
@@ -68,7 +57,6 @@ function LoginForm({ onLoginSuccess }) {
         {errors.id && <p style={styles.fieldErrorMsg}>{errors.id}</p>}
       </div>
 
-      {/* 비밀번호 입력 */}
       <div style={styles.fieldGroup}>
         <input
           type="password"
@@ -77,7 +65,7 @@ function LoginForm({ onLoginSuccess }) {
             setPassword(e.target.value);
             setErrors((prev) => ({ ...prev, password: undefined, auth: undefined }));
           }}
-          placeholder="비밀번호를 입력하세요"
+          placeholder={t("login.pwPlaceholder")}
           autoComplete="current-password"
           disabled={isLoading}
           style={{
@@ -89,12 +77,10 @@ function LoginForm({ onLoginSuccess }) {
         {errors.password && <p style={styles.fieldErrorMsg}>{errors.password}</p>}
       </div>
 
-      {/* 인증 실패 공통 오류 메시지 */}
       {errors.auth && <p style={styles.authErrorMsg}>{errors.auth}</p>}
 
-      {/* 로그인 버튼 */}
       <button type="submit" disabled={isLoading} style={styles.button}>
-        {isLoading ? "로그인 중..." : "로그인"}
+        {isLoading ? t("login.loading") : t("login.button")}
       </button>
     </form>
   );
@@ -114,6 +100,7 @@ const styles = {
     textAlign: "center",
     marginBottom: "32px",
     lineHeight: "1.5",
+    whiteSpace: "pre-line",
   },
   fieldGroup: {
     display: "flex",
@@ -134,13 +121,8 @@ const styles = {
     outline: "none",
     transition: "border-color 0.15s",
   },
-  inputError: {
-    borderColor: "#D14343",
-  },
-  inputDisabled: {
-    backgroundColor: "#F5F5F5",
-    cursor: "not-allowed",
-  },
+  inputError:    { borderColor: "#D14343" },
+  inputDisabled: { backgroundColor: "#F5F5F5", cursor: "not-allowed" },
   fieldErrorMsg: {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "13px",
