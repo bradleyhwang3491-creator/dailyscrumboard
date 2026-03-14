@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useLanguage } from "../context/LanguageContext";
 
 /** 사용자 정보 관리 페이지 */
 function UserManagementPage() {
   const { t } = useLanguage();
+  const isMobile = useBreakpoint(768);
   const [departments, setDepartments] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -176,11 +178,11 @@ function UserManagementPage() {
       </div>
 
       {/* 조회 조건 */}
-      <div style={s.searchBar}>
-        <div style={s.searchField}>
+      <div style={{ ...s.searchBar, ...(isMobile ? s.searchBarMobile : {}) }}>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={s.label}>{t("userMgmt.deptLabel")}</label>
           <select
-            style={s.select}
+            style={isMobile ? s.selectFull : s.select}
             value={searchDept}
             onChange={(e) => setSearchDept(e.target.value)}
           >
@@ -190,10 +192,10 @@ function UserManagementPage() {
             ))}
           </select>
         </div>
-        <div style={s.searchField}>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={s.label}>{t("userMgmt.nameLabel")}</label>
           <input
-            style={s.input}
+            style={isMobile ? s.inputFull : s.input}
             type="text"
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
@@ -201,7 +203,7 @@ function UserManagementPage() {
             placeholder={t("userMgmt.namePlaceholder")}
           />
         </div>
-        <button style={s.searchBtn} onClick={handleSearch}>{t("userMgmt.searchBtn")}</button>
+        <button style={isMobile ? s.searchBtnFull : s.searchBtn} onClick={handleSearch}>{t("userMgmt.searchBtn")}</button>
       </div>
 
       {/* 데이터 테이블 */}
@@ -481,11 +483,13 @@ const s = {
     marginBottom: "16px",
     flexWrap: "wrap",
   },
+  searchBarMobile: { flexDirection: "column", alignItems: "stretch", gap: "8px", padding: "14px 16px" },
   searchField: {
     display: "flex",
     alignItems: "center",
     gap: "8px",
   },
+  searchFieldMobile: { display: "flex", flexDirection: "column", gap: "4px" },
   label: {
     fontSize: "13px",
     fontWeight: "500",
@@ -503,6 +507,17 @@ const s = {
     minWidth: "140px",
     cursor: "pointer",
   },
+  selectFull: {
+    fontFamily: "'Pretendard', sans-serif",
+    fontSize: "13px",
+    color: "#2F2F2F",
+    border: "1px solid #D9D9D9",
+    borderRadius: "5px",
+    padding: "8px 10px",
+    outline: "none",
+    width: "100%",
+    cursor: "pointer",
+  },
   input: {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "13px",
@@ -511,6 +526,17 @@ const s = {
     borderRadius: "5px",
     padding: "7px 10px",
     outline: "none",
+  },
+  inputFull: {
+    fontFamily: "'Pretendard', sans-serif",
+    fontSize: "13px",
+    color: "#2F2F2F",
+    border: "1px solid #D9D9D9",
+    borderRadius: "5px",
+    padding: "8px 10px",
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
   },
   searchBtn: {
     fontFamily: "'Pretendard', sans-serif",
@@ -523,11 +549,23 @@ const s = {
     padding: "7px 20px",
     cursor: "pointer",
   },
+  searchBtnFull: {
+    fontFamily: "'Pretendard', sans-serif",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#FFFFFF",
+    backgroundColor: "#3A3A3A",
+    border: "none",
+    borderRadius: "5px",
+    padding: "9px 20px",
+    cursor: "pointer",
+    width: "100%",
+  },
   tableWrap: {
     backgroundColor: "#FFFFFF",
     border: "1px solid #E8E8E8",
     borderRadius: "8px",
-    overflow: "hidden",
+    overflow: "auto",
   },
   table: {
     width: "100%",

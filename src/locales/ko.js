@@ -70,6 +70,14 @@ export const ko = {
     tm1ListBtn: "☰ 업무구분1 List",
     addBtn: "+ 등록",
     dropHere: "여기에 놓기",
+    overdue: "마감일 초과",
+    overdueOnly: "마감일 초과 업무만",
+    card: {
+      tm1Deadline: "업무구분1 마감일자",
+      regDate: "SCRUM 등록일",
+      plannedEnd: "완료예정일",
+      actualEnd: "작업완료일",
+    },
     modal: {
       register: "업무 등록",
       detail: "업무 상세",

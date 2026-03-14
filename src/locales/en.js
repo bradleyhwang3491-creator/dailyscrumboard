@@ -70,6 +70,14 @@ export const en = {
     tm1ListBtn: "☰ Category 1 List",
     addBtn: "+ Add",
     dropHere: "Drop here",
+    overdue: "Overdue",
+    overdueOnly: "Show overdue tasks only",
+    card: {
+      tm1Deadline: "Cat.1 Deadline",
+      regDate: "Reg. Date",
+      plannedEnd: "Due Date",
+      actualEnd: "Done Date",
+    },
     modal: {
       register: "Add Task",
       detail: "Task Detail",

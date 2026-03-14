@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 날짜 헬퍼 ─────────────── */
@@ -235,6 +236,7 @@ function IssueItem({ task, userMap, onClick }) {
 export default function CommunicationBoardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const isMobile = useBreakpoint(768);
 
   const SECTIONS = [
     { id: "received", title: t("comm.received"),   sub: "Requests Received", accent: "#3B82F6", emptyMsg: t("comm.noReceived"),   emptyIcon: "inbox" },
@@ -467,7 +469,7 @@ export default function CommunicationBoardPage() {
       </div>
 
       {/* ── 2×2 그리드 ── */}
-      <div style={s.grid}>
+      <div style={{ ...s.grid, ...(isMobile ? s.gridMobile : {}) }}>
         {SECTIONS.map(sec => {
           const isHov = hovered === sec.id;
           return (
@@ -943,6 +945,7 @@ const s = {
   requestBtn:  { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#1E293B", border: "none", borderRadius: "7px", padding: "9px 18px", cursor: "pointer", whiteSpace: "nowrap" },
 
   grid:        { flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: "14px", minHeight: 0 },
+  gridMobile:  { gridTemplateColumns: "1fr", gridTemplateRows: "auto", gap: "12px", minHeight: "unset" },
   card:        { backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "10px", display: "flex", flexDirection: "column", overflow: "hidden", transition: "box-shadow 0.18s ease", minHeight: 0 },
   accentBar:   { height: "3px", flexShrink: 0 },
   cardHeader:  { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 12px", flexShrink: 0 },

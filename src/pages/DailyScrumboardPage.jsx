@@ -57,8 +57,9 @@ function DailyScrumboardPage() {
   const [deptUsers, setDeptUsers] = useState([]); // 같은 부서 사용자 목록
 
   // 조회 조건
-  const [searchType1,  setSearchType1]  = useState("");
-  const [searchUserId, setSearchUserId] = useState("");
+  const [searchType1,   setSearchType1]   = useState("");
+  const [searchUserId,  setSearchUserId]  = useState("");
+  const [searchOverdue, setSearchOverdue] = useState(false);
 
   // 모바일 컬럼 탭
   const [activeMobileCol, setActiveMobileCol] = useState("TODO");
@@ -159,9 +160,11 @@ function DailyScrumboardPage() {
   }
 
   /** 조회 조건 적용 */
+  const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
   const filteredTasks = tasks.filter((t) => {
     if (searchType1  && t.taskType1Cd !== searchType1)  return false;
     if (searchUserId && t.registrantId !== searchUserId) return false;
+    if (searchOverdue && !(t.plannedEnd && t.plannedEnd < today && t.status !== "COMPLETE")) return false;
     return true;
   });
 
@@ -386,7 +389,18 @@ function DailyScrumboardPage() {
             {deptUsers.map((u) => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
           </select>
         </div>
-        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); }}>{t("common.reset")}</button>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
+          <label style={{ ...s.searchLabel, display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", userSelect: "none" }}>
+            <input
+              type="checkbox"
+              checked={searchOverdue}
+              onChange={(e) => setSearchOverdue(e.target.checked)}
+              style={{ accentColor: "#DC2626", width: "14px", height: "14px", cursor: "pointer" }}
+            />
+            <span style={{ ...s.searchLabel, color: searchOverdue ? "#DC2626" : "#5A5A5A" }}>{t("daily.overdue")}</span>
+          </label>
+        </div>
+        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); setSearchOverdue(false); }}>{t("common.reset")}</button>
       </div>
 
       {/* ── 칸반 보드 ── */}
@@ -790,6 +804,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 
 /* ═══════════════════════ 카드 ═══════════════════════ */
 function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
+  const { t } = useLanguage();
   const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES["하"];
   const tm1Item  = tm1.find((t) => String(t.TASK_ID) === String(task.taskType1Cd));
   const type1Nm  = tm1Item?.TASK_NAME ?? "";
@@ -859,25 +874,25 @@ function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onReso
         <div style={s.dateGrid}>
           {type1Dl && (
             <div style={s.dateCell}>
-              <span style={{ ...s.dateLbl, ...s.dateLblDeadline }}>구분1 마감</span>
+              <span style={{ ...s.dateLbl, ...s.dateLblDeadline }}>{t("daily.card.tm1Deadline")}</span>
               <span style={{ ...s.dateVal, color: "#B45309" }}>{type1Dl}</span>
             </div>
           )}
           {task.regDate && (
             <div style={s.dateCell}>
-              <span style={s.dateLbl}>SCRUM 등록일</span>
+              <span style={s.dateLbl}>{t("daily.card.regDate")}</span>
               <span style={s.dateVal}>{task.regDate}</span>
             </div>
           )}
           {task.plannedEnd && (
             <div style={s.dateCell}>
-              <span style={{ ...s.dateLbl, ...s.dateLblPlanned }}>완료예정일</span>
+              <span style={{ ...s.dateLbl, ...s.dateLblPlanned }}>{t("daily.card.plannedEnd")}</span>
               <span style={{ ...s.dateVal, color: "#2563EB" }}>{task.plannedEnd}</span>
             </div>
           )}
           {task.actualEnd && (
             <div style={s.dateCell}>
-              <span style={{ ...s.dateLbl, ...s.dateLblDone }}>작업완료일</span>
+              <span style={{ ...s.dateLbl, ...s.dateLblDone }}>{t("daily.card.actualEnd")}</span>
               <span style={{ ...s.dateVal, color: "#16A34A" }}>{task.actualEnd}</span>
             </div>
           )}

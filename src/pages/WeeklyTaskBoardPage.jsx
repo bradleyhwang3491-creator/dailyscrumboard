@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useBreakpoint } from "../hooks/useBreakpoint";
 import { useLanguage } from "../context/LanguageContext";
 
 /* ─────────────── 상수 ─────────────── */
@@ -108,6 +109,7 @@ function todayWeekOfMonth() {
 export default function WeeklyTaskBoardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const isMobile = useBreakpoint(768);
   const DAY_NAMES = t("weekly.days");
   const STATUS_LABEL = {
     TODO:     t("common.todo"),
@@ -315,12 +317,12 @@ export default function WeeklyTaskBoardPage() {
   return (
     <div style={s.wrap}>
       {/* ── 상단 헤더 ── */}
-      <div style={s.topBar}>
+      <div style={{ ...s.topBar, ...(isMobile ? s.topBarMobile : {}) }}>
         <div style={s.titleArea}>
-          <h2 style={s.pageTitle}>Weekly Task Board</h2>
+          <h2 style={{ ...s.pageTitle, ...(isMobile ? { fontSize: "15px" } : {}) }}>Weekly Task Board</h2>
           <span style={s.totalBadge}>{filteredTasks.length}건</span>
         </div>
-        <div style={s.headerRight}>
+        <div style={{ ...s.headerRight, ...(isMobile ? s.headerRightMobile : {}) }}>
           {/* 월 이동 */}
           <div style={s.monthCtrl}>
             <button style={s.navBtn} onClick={prevMonth}>‹</button>
@@ -346,23 +348,23 @@ export default function WeeklyTaskBoardPage() {
       </div>
 
       {/* ── 조회 조건 ── */}
-      <div style={s.filterBar}>
-        <div style={s.filterField}>
+      <div style={{ ...s.filterBar, ...(isMobile ? s.filterBarMobile : {}) }}>
+        <div style={isMobile ? s.filterFieldMobile : s.filterField}>
           <span style={s.filterLabel}>{t("common.task1")}</span>
-          <select style={s.filterSelect} value={filterTm1} onChange={e => setFilterTm1(e.target.value)}>
+          <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={filterTm1} onChange={e => setFilterTm1(e.target.value)}>
             <option value="">{t("common.all")}</option>
             {tm1.map(t => <option key={t.TASK_ID} value={String(t.TASK_ID)}>{t.TASK_NAME}</option>)}
           </select>
         </div>
-        <div style={s.filterField}>
+        <div style={isMobile ? s.filterFieldMobile : s.filterField}>
           <span style={s.filterLabel}>{t("common.writer")}</span>
-          <select style={s.filterSelect} value={filterUser} onChange={e => setFilterUser(e.target.value)}>
+          <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={filterUser} onChange={e => setFilterUser(e.target.value)}>
             <option value="">{t("common.all")}</option>
             {uniqueRegistrants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </div>
         {hasFilter && (
-          <button style={s.resetBtn} onClick={() => { setFilterTm1(""); setFilterUser(""); }}>{t("common.reset")}</button>
+          <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setFilterTm1(""); setFilterUser(""); }}>{t("common.reset")}</button>
         )}
       </div>
 
@@ -675,7 +677,9 @@ function ViewModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
 /* ═══════════════════════ 스타일 ═══════════════════════ */
 const s = {
   wrap:      { display: "flex", flexDirection: "column", height: "100%", fontFamily: "'Pretendard', sans-serif" },
-  topBar:    { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexShrink: 0 },
+  topBar:      { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px", flexShrink: 0 },
+  topBarMobile:{ flexDirection: "column", alignItems: "flex-start", gap: "8px" },
+  headerRightMobile: { width: "100%", justifyContent: "space-between" },
   titleArea: { display: "flex", alignItems: "center", gap: "10px" },
   pageTitle: { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: 0 },
   totalBadge:{ fontSize: "12px", fontWeight: "600", color: "#2563EB", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "20px", padding: "2px 10px" },
@@ -701,11 +705,15 @@ const s = {
   weekTabTodayDot:  { position: "absolute", top: "5px", right: "7px", width: "5px", height: "5px", borderRadius: "50%", backgroundColor: "#3B82F6" },
 
   /* 조회 조건 */
-  filterBar:    { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", padding: "10px 16px", marginBottom: "10px", flexShrink: 0 },
-  filterField:  { display: "flex", alignItems: "center", gap: "8px" },
-  filterLabel:  { fontSize: "13px", fontWeight: "500", color: "#5A5A5A", whiteSpace: "nowrap" },
-  filterSelect: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 10px", outline: "none", minWidth: "140px", cursor: "pointer" },
-  resetBtn:     { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 12px", cursor: "pointer" },
+  filterBar:        { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "8px", padding: "10px 16px", marginBottom: "10px", flexShrink: 0 },
+  filterBarMobile:  { flexDirection: "column", alignItems: "stretch", gap: "8px" },
+  filterField:      { display: "flex", alignItems: "center", gap: "8px" },
+  filterFieldMobile:{ display: "flex", flexDirection: "column", gap: "4px" },
+  filterLabel:      { fontSize: "13px", fontWeight: "500", color: "#5A5A5A", whiteSpace: "nowrap" },
+  filterSelect:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 10px", outline: "none", minWidth: "140px", cursor: "pointer" },
+  filterSelectFull: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 10px", outline: "none", width: "100%", cursor: "pointer" },
+  resetBtn:         { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "6px 12px", cursor: "pointer" },
+  resetBtnFull:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "9px 12px", cursor: "pointer", width: "100%" },
 
   loadingBox:  { display: "flex", alignItems: "center", justifyContent: "center", height: "200px", color: "#94A3B8", fontSize: "14px" },
   emptyBox:    { padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "14px" },
