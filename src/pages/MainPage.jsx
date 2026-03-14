@@ -6,13 +6,19 @@ import { useBreakpoint } from "../hooks/useBreakpoint";
 import UserManagementPage from "./UserManagementPage";
 import DailyScrumboardPage from "./DailyScrumboardPage";
 import AIWeeklyReportPage from "./AIWeeklyReportPage";
+import YearlyTaskBoardPage from "./YearlyTaskBoardPage";
+import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
 
 const MENU_ITEMS = [
-  { id: "dashboard",  label: "Dashboard",        emoji: "◈" },
-  { id: "scrumboard", label: "Daily Scrumboard",  emoji: "▦" },
-  { id: "ai-report",  label: "AI Weekly Report",  emoji: "◉" },
-  { id: "user-mgmt",  label: "사용자 정보 관리",   emoji: "◎" },
+  { id: "dashboard",    label: "Dashboard",          emoji: "◈" },
+  { id: "scrumboard",   label: "Daily Scrumboard",    emoji: "▦" },
+  { id: "yearly-board", label: "Yearly Task Board",   emoji: "◻" },
+  { id: "weekly-board", label: "Weekly Task Board",   emoji: "▤" },
+  { id: "ai-report",    label: "AI Weekly Report",    emoji: "◉" },
+  { id: "user-mgmt",    label: "사용자 정보 관리",     emoji: "◎", adminOnly: true },
 ];
+
+const ADMIN_ID = "SUNGHYUN_HWANG";
 
 function MainPage() {
   const navigate = useNavigate();
@@ -58,20 +64,27 @@ function MainPage() {
         </div>
       )}
 
-      {MENU_ITEMS.map((item) => (
-        <button
-          key={item.id}
-          onClick={() => handleMenuClick(item.id)}
-          style={{
-            ...styles.menuItem,
-            ...(activeMenu === item.id ? styles.menuItemActive : {}),
-          }}
-        >
-          {activeMenu === item.id && <span style={styles.activeBar} />}
-          <span style={styles.menuEmoji}>{item.emoji}</span>
-          {item.label}
-        </button>
-      ))}
+      {MENU_ITEMS.map((item) => {
+        const disabled = item.adminOnly && user?.id !== ADMIN_ID;
+        return (
+          <button
+            key={item.id}
+            disabled={disabled}
+            onClick={() => !disabled && handleMenuClick(item.id)}
+            title={disabled ? "관리자만 접근 가능한 메뉴입니다." : undefined}
+            style={{
+              ...styles.menuItem,
+              ...(activeMenu === item.id ? styles.menuItemActive : {}),
+              ...(disabled ? styles.menuItemDisabled : {}),
+            }}
+          >
+            {activeMenu === item.id && !disabled && <span style={styles.activeBar} />}
+            <span style={{ ...styles.menuEmoji, ...(disabled ? { opacity: 0.4 } : {}) }}>{item.emoji}</span>
+            <span style={disabled ? { opacity: 0.4 } : {}}>{item.label}</span>
+            {disabled && <span style={styles.lockBadge}>🔒</span>}
+          </button>
+        );
+      })}
     </nav>
   );
 
@@ -130,6 +143,10 @@ function MainPage() {
             <UserManagementPage />
           ) : activeMenu === "scrumboard" ? (
             <DailyScrumboardPage />
+          ) : activeMenu === "yearly-board" ? (
+            <YearlyTaskBoardPage />
+          ) : activeMenu === "weekly-board" ? (
+            <WeeklyTaskBoardPage />
           ) : activeMenu === "ai-report" ? (
             <AIWeeklyReportPage />
           ) : (
@@ -323,6 +340,16 @@ const styles = {
     backgroundColor: "#F4F4F4",
     color: "#2F2F2F",
     fontWeight: "600",
+  },
+  menuItemDisabled: {
+    cursor: "not-allowed",
+    backgroundColor: "transparent",
+    color: "#C0C0C0",
+  },
+  lockBadge: {
+    marginLeft: "auto",
+    fontSize: "11px",
+    opacity: 0.5,
   },
   activeBar: {
     position: "absolute",

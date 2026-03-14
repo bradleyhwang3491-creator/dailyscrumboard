@@ -22,6 +22,8 @@ const INIT_FORM = {
   regDate: new Date().toISOString().split("T")[0],
   taskType1Cd: "",
   taskType2Cd: "",
+  taskType3Cd: "",
+  taskType4Cd: "",
   content: "", teamNote: "", issue: "",
   issueCompleteYn: "N",
   plannedEnd: "", actualEnd: "",
@@ -45,6 +47,8 @@ function DailyScrumboardPage() {
   const [tasks,     setTasks]     = useState([]);
   const [tm1,       setTm1]       = useState([]);
   const [tm2,       setTm2]       = useState([]);
+  const [tm3,       setTm3]       = useState([]);
+  const [tm4,       setTm4]       = useState([]);
   const [userMap,   setUserMap]   = useState({});
   const [deptUsers, setDeptUsers] = useState([]); // 같은 부서 사용자 목록
 
@@ -77,14 +81,23 @@ function DailyScrumboardPage() {
     fetchTasks();
   }, []);
 
-  /** TASK_MASTER 조회 */
+  /** TASK_MASTER 조회 (로그인 사용자 부서 필터) */
   async function fetchTaskMaster() {
-    const { data: d1 } = await supabase
-      .from("TASK_MASTER").select("TASK_ID, TASK_NAME").eq("LEVEL", "1").order("TASK_NAME");
-    const { data: d2 } = await supabase
-      .from("TASK_MASTER").select("TASK_ID, TASK_NAME").eq("LEVEL", "2").order("TASK_NAME");
-    if (d1) setTm1(d1);
+    const dept = user?.deptCd;
+    const mkQ = (level) => {
+      // LEVEL 1만 DEADLINE 포함 조회
+      const cols = level === "1" ? "TASK_ID, TASK_NAME, DEADLINE" : "TASK_ID, TASK_NAME";
+      let q = supabase.from("TASK_MASTER").select(cols).eq("LEVEL", level).order("TASK_NAME");
+      if (dept) q = q.eq("DEPT_CD", dept);
+      return q;
+    };
+    const [{ data: d1 }, { data: d2 }, { data: d3 }, { data: d4 }] =
+      await Promise.all([mkQ("1"), mkQ("2"), mkQ("3"), mkQ("4")]);
+    // DEADLINE 컬럼명 대소문자 정규화 (Supabase는 소문자로 반환할 수 있음)
+    if (d1) setTm1(d1.map((r) => ({ ...r, DEADLINE: r.DEADLINE ?? r.deadline ?? null })));
     if (d2) setTm2(d2);
+    if (d3) setTm3(d3);
+    if (d4) setTm4(d4);
   }
 
   /** 전체 사용자 조회 → ID→NAME 맵 + 같은 부서 필터 */
@@ -104,10 +117,11 @@ function DailyScrumboardPage() {
     setDeptUsers(sameTeam);
   }
 
-  /** TASK_BOARD 조회 */
+  /** TASK_BOARD 조회 (로그인 사용자 부서 필터) */
   async function fetchTasks() {
-    const { data } = await supabase
-      .from("TASK_BOARD").select("*").order("BOARD_ID", { ascending: false });
+    let q = supabase.from("TASK_BOARD").select("*").order("BOARD_ID", { ascending: false });
+    if (user?.deptCd) q = q.eq("DEPT_CD", user.deptCd);
+    const { data } = await q;
     if (data) {
       setTasks(data.map((t) => ({
         id:           t.BOARD_ID,
@@ -115,6 +129,8 @@ function DailyScrumboardPage() {
         regDate:      fromDate8(t.INSERT_DATE),
         taskType1Cd:  t.TASK_GUBUN1 ?? "",
         taskType2Cd:  t.TASK_GUBUN2 ?? "",
+        taskType3Cd:  t.TASK_GUBUN3 ?? "",
+        taskType4Cd:  t.TASK_GUBUN4 ?? "",
         content:      t.TASK_CONTENT ?? "",
         teamNote:     t.LEADER_KNOW ?? "",
         issue:        t.ISSUE ?? "",
@@ -144,9 +160,12 @@ function DailyScrumboardPage() {
     const { error } = await supabase.from("TASK_BOARD").insert({
       TITLE:            regForm.title.trim(),
       INSERT_DATE:      today,
-      ID:               user?.id ?? "",
+      ID:               user?.id   ?? "",
+      DEPT_CD:          user?.deptCd ?? null,
       TASK_GUBUN1:      regForm.taskType1Cd || null,
       TASK_GUBUN2:      regForm.taskType2Cd || null,
+      TASK_GUBUN3:      regForm.taskType3Cd || null,
+      TASK_GUBUN4:      regForm.taskType4Cd || null,
       TASK_CONTENT:     regForm.content,
       LEADER_KNOW:      regForm.teamNote,
       ISSUE:            regForm.issue,
@@ -174,6 +193,8 @@ function DailyScrumboardPage() {
       TITLE:           editForm.title.trim(),
       TASK_GUBUN1:     editForm.taskType1Cd || null,
       TASK_GUBUN2:     editForm.taskType2Cd || null,
+      TASK_GUBUN3:     editForm.taskType3Cd || null,
+      TASK_GUBUN4:     editForm.taskType4Cd || null,
       TASK_CONTENT:    editForm.content,
       LEADER_KNOW:     editForm.teamNote,
       ISSUE:           editForm.issue,
@@ -190,6 +211,72 @@ function DailyScrumboardPage() {
 
   function closeDetail()  { setDetailTask(null); setEditForm(null); setIsEditing(false); }
   function cancelEdit()   { setEditForm({ ...detailTask }); setIsEditing(false); }
+
+  /* ── 업무구분 신규 등록 ── */
+  async function handleAddTaskMaster(level, name, extra = {}) {
+    // TASK_ID 자동 채번: 현재 최대값 + 1
+    const { data: maxData, error: maxError } = await supabase
+      .from("TASK_MASTER")
+      .select("TASK_ID")
+      .order("TASK_ID", { ascending: false })
+      .limit(1);
+
+    if (maxError) return { success: false, message: maxError.message };
+
+    const nextId = maxData && maxData.length > 0 ? maxData[0].TASK_ID + 1 : 1;
+
+    const insertData = {
+      TASK_ID:  nextId,
+      TASK_NAME: name,
+      LEVEL:    level,
+      ID:       user?.id   ?? null,
+      DEPT_CD:  user?.deptCd ?? null,
+    };
+
+    // 업무구분1 전용 추가 필드
+    if (level === "1") {
+      if (extra.objective) insertData.OBJECTIVE  = extra.objective;
+      if (extra.coworkers) insertData.COWORKERS  = extra.coworkers;
+      if (extra.deadline)  insertData.DEADLINE   = extra.deadline;
+      if (extra.desc)      insertData.DESC       = extra.desc;
+    }
+
+    const { data, error } = await supabase
+      .from("TASK_MASTER")
+      .insert(insertData)
+      .select("TASK_ID, TASK_NAME, DEADLINE");
+
+    if (error) return { success: false, message: error.message };
+
+    // INSERT 반환 데이터로 즉시 드롭다운 갱신
+    if (data && data.length > 0) {
+      // DEADLINE 대소문자 정규화 후 상태 갱신
+      const rawItem = data[0];
+      const newItem = { ...rawItem, DEADLINE: rawItem.DEADLINE ?? rawItem.deadline ?? null };
+      const sorter = (a, b) => a.TASK_NAME.localeCompare(b.TASK_NAME, "ko");
+      if      (level === "1") setTm1((prev) => [...prev, newItem].sort(sorter));
+      else if (level === "2") setTm2((prev) => [...prev, newItem].sort(sorter));
+      else if (level === "3") setTm3((prev) => [...prev, newItem].sort(sorter));
+      else if (level === "4") setTm4((prev) => [...prev, newItem].sort(sorter));
+    }
+    return { success: true };
+  }
+
+  /* ── 업무구분 삭제 ── */
+  async function handleDeleteTaskMaster(level, taskId) {
+    const { error } = await supabase
+      .from("TASK_MASTER")
+      .delete()
+      .eq("TASK_ID", taskId);
+    if (!error) {
+      const rm = (setter) => setter((prev) => prev.filter((t) => t.TASK_ID !== taskId));
+      if      (level === "1") rm(setTm1);
+      else if (level === "2") rm(setTm2);
+      else if (level === "3") rm(setTm3);
+      else if (level === "4") rm(setTm4);
+    }
+    return { success: !error, message: error?.message };
+  }
 
   /* ── 이슈 해결 ── */
   async function handleResolveIssue(cardId) {
@@ -322,7 +409,7 @@ function DailyScrumboardPage() {
                 ) : (
                   colTasks.map((task) => (
                     <TaskCard
-                      key={task.id} task={task} tm1={tm1} tm2={tm2} userMap={userMap}
+                      key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap}
                       onClick={openDetail}
                       onResolveIssue={handleResolveIssue}
                       isDragging={false}
@@ -361,7 +448,7 @@ function DailyScrumboardPage() {
                     ) : (
                       colTasks.map((task) => (
                         <TaskCard
-                          key={task.id} task={task} tm1={tm1} tm2={tm2} userMap={userMap}
+                          key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap}
                           onClick={openDetail}
                           onResolveIssue={handleResolveIssue}
                           isDragging={dragCardId === task.id}
@@ -384,10 +471,13 @@ function DailyScrumboardPage() {
       {/* 등록 모달 */}
       {isRegOpen && (
         <TaskModal title="업무 등록" form={regForm} setForm={setRegForm} errors={regErrors}
-          tm1={tm1} tm2={tm2} readOnly={false}
+          tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} readOnly={false}
           submitLabel={regLoading ? "등록 중..." : "등록"} submitDisabled={regLoading}
           onSubmit={handleRegister}
-          onClose={() => { setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({}); }} />
+          onClose={() => { setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({}); }}
+          onAddTaskMaster={handleAddTaskMaster}
+          onDeleteTaskMaster={handleDeleteTaskMaster}
+          deptUsers={deptUsers} />
       )}
 
       {/* 상세/수정 모달 */}
@@ -395,23 +485,30 @@ function DailyScrumboardPage() {
         <TaskModal
           title={isEditing ? "업무 수정" : "업무 상세"}
           form={editForm} setForm={setEditForm} errors={{}}
-          tm1={tm1} tm2={tm2} readOnly={!isEditing}
+          tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} readOnly={!isEditing}
           submitLabel={isEditing ? (editLoading ? "저장 중..." : "저장") : "수정"}
           submitDisabled={editLoading}
           onSubmit={isEditing ? handleUpdate : () => setIsEditing(true)}
           onClose={isEditing ? cancelEdit : closeDetail}
           closeLabel={isEditing ? "취소" : "닫기"}
-          onResolveIssue={handleResolveIssue} />
+          onResolveIssue={handleResolveIssue}
+          onAddTaskMaster={handleAddTaskMaster}
+          onDeleteTaskMaster={handleDeleteTaskMaster}
+          deptUsers={deptUsers} />
       )}
     </div>
   );
 }
 
 /* ═══════════════════════ 카드 ═══════════════════════ */
-function TaskCard({ task, tm1, tm2, userMap, onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
+function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
   const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES["일반"];
-  const type1Nm = tm1.find((t) => t.TASK_ID === task.taskType1Cd)?.TASK_NAME ?? task.taskType1Cd ?? "";
-  const type2Nm = tm2.find((t) => t.TASK_ID === task.taskType2Cd)?.TASK_NAME ?? task.taskType2Cd ?? "";
+  const tm1Item  = tm1.find((t) => String(t.TASK_ID) === String(task.taskType1Cd));
+  const type1Nm  = tm1Item?.TASK_NAME ?? "";
+  const type1Dl  = tm1Item?.DEADLINE ?? tm1Item?.deadline ?? "";  // 업무구분1 마감일
+  const type2Nm  = tm2.find((t) => String(t.TASK_ID) === String(task.taskType2Cd))?.TASK_NAME ?? "";
+  const type3Nm  = tm3.find((t) => String(t.TASK_ID) === String(task.taskType3Cd))?.TASK_NAME ?? "";
+  const type4Nm  = tm4.find((t) => String(t.TASK_ID) === String(task.taskType4Cd))?.TASK_NAME ?? "";
   const registrantName = userMap[task.registrantId] || task.registrantId || "";
   const hasIssue    = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
@@ -441,10 +538,12 @@ function TaskCard({ task, tm1, tm2, userMap, onClick, onResolveIssue, isDragging
       <p style={s.cardTitle}>{task.title}</p>
 
       {/* 업무구분 칩 */}
-      {(type1Nm || type2Nm) && (
+      {(type1Nm || type2Nm || type3Nm || type4Nm) && (
         <div style={s.chipRow}>
           {type1Nm && <span style={s.chip}>{type1Nm}</span>}
           {type2Nm && <span style={s.chip}>{type2Nm}</span>}
+          {type3Nm && <span style={{ ...s.chip, backgroundColor: "#F0FDF4", color: "#15803D", borderColor: "#86EFAC" }}>{type3Nm}</span>}
+          {type4Nm && <span style={{ ...s.chip, backgroundColor: "#FFF7ED", color: "#C2410C", borderColor: "#FDBA74" }}>{type4Nm}</span>}
         </div>
       )}
 
@@ -467,12 +566,92 @@ function TaskCard({ task, tm1, tm2, userMap, onClick, onResolveIssue, isDragging
         </div>
       )}
 
-      {/* 날짜 한 줄 */}
-      <div style={s.dateRow}>
-        {task.regDate   && <span style={s.dateItem}>📅 {task.regDate}</span>}
-        {task.plannedEnd && <><span style={s.dateSep}>·</span><span style={s.dateItem}>⏰ {task.plannedEnd}</span></>}
-        {task.actualEnd  && <><span style={s.dateSep}>·</span><span style={{ ...s.dateItem, color: "#16A34A" }}>✅ {task.actualEnd}</span></>}
+      {/* 날짜 블록 */}
+      {(type1Dl || task.regDate || task.plannedEnd || task.actualEnd) && (
+        <div style={s.dateGrid}>
+          {type1Dl && (
+            <div style={s.dateCell}>
+              <span style={{ ...s.dateLbl, ...s.dateLblDeadline }}>구분1 마감</span>
+              <span style={{ ...s.dateVal, color: "#B45309" }}>{type1Dl}</span>
+            </div>
+          )}
+          {task.regDate && (
+            <div style={s.dateCell}>
+              <span style={s.dateLbl}>SCRUM 등록일</span>
+              <span style={s.dateVal}>{task.regDate}</span>
+            </div>
+          )}
+          {task.plannedEnd && (
+            <div style={s.dateCell}>
+              <span style={{ ...s.dateLbl, ...s.dateLblPlanned }}>완료예정일</span>
+              <span style={{ ...s.dateVal, color: "#2563EB" }}>{task.plannedEnd}</span>
+            </div>
+          )}
+          {task.actualEnd && (
+            <div style={s.dateCell}>
+              <span style={{ ...s.dateLbl, ...s.dateLblDone }}>작업완료일</span>
+              <span style={{ ...s.dateVal, color: "#16A34A" }}>{task.actualEnd}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════ 업무구분 커스텀 드롭다운 ═══════════════════════ */
+function TaskMasterSelect({ value, options, readOnly, onChange, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => String(o.TASK_ID) === String(value));
+
+  if (readOnly) {
+    return (
+      <div style={{ ...ms.input, ...ms.inputRO, color: selected ? "#475569" : "#94A3B8" }}>
+        {selected?.TASK_NAME || "선택"}
       </div>
+    );
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{ ...ms.input, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", userSelect: "none" }}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span style={{ color: selected ? "#1E293B" : "#94A3B8" }}>{selected?.TASK_NAME || "선택"}</span>
+        <span style={{ fontSize: "10px", color: "#94A3B8" }}>{open ? "▴" : "▾"}</span>
+      </div>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 15 }} onClick={() => setOpen(false)} />
+          <div style={ms.tmDropdown}>
+            <div
+              style={ms.tmOptionRow}
+              onClick={() => { onChange(""); setOpen(false); }}
+            >
+              <span style={{ ...ms.tmOptionText, color: "#94A3B8" }}>선택</span>
+            </div>
+            {options.map((opt) => (
+              <div key={opt.TASK_ID} style={ms.tmOptionRow}>
+                <span
+                  style={{ ...ms.tmOptionText, color: String(opt.TASK_ID) === String(value) ? "#2563EB" : "#1E293B", fontWeight: String(opt.TASK_ID) === String(value) ? "600" : "400" }}
+                  onClick={() => { onChange(String(opt.TASK_ID)); setOpen(false); }}
+                >
+                  {opt.TASK_NAME}
+                </span>
+                {onDelete && (
+                  <button
+                    style={ms.tmDeleteBtn}
+                    onClick={(e) => { e.stopPropagation(); onDelete(opt.TASK_ID); }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -480,11 +659,53 @@ function TaskCard({ task, tm1, tm2, userMap, onClick, onResolveIssue, isDragging
 /* ═══════════════════════ 폼 모달 ═══════════════════════ */
 const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", COMPLETE: "COMPLETE" };
 
-function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
+function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel = "취소",
-                     onResolveIssue }) {
+                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, deptUsers = [] }) {
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
+
+  // 업무구분 신규 등록 미니 팝업
+  const [addTmLevel,      setAddTmLevel]      = useState(null); // null | "1" | "2"
+  const [addTmName,       setAddTmName]       = useState("");
+  const [addTmObjective,  setAddTmObjective]  = useState("");
+  const [addTmCoworkers,  setAddTmCoworkers]  = useState([]); // 이름 배열
+  const [addTmDeadline,   setAddTmDeadline]   = useState("");
+  const [addTmDesc,       setAddTmDesc]       = useState("");
+  const [addTmLoading,    setAddTmLoading]    = useState(false);
+  const [addTmError,      setAddTmError]      = useState("");
+
+  function resetAddTm() {
+    setAddTmLevel(null); setAddTmName(""); setAddTmObjective("");
+    setAddTmCoworkers([]); setAddTmDeadline(""); setAddTmDesc(""); setAddTmError("");
+  }
+
+  function toggleCoworker(name) {
+    setAddTmCoworkers((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    );
+  }
+
+  async function handleAddTm() {
+    if (!addTmName.trim()) { setAddTmError("명칭을 입력해주세요."); return; }
+    setAddTmLoading(true);
+    setAddTmError("");
+    const extra = addTmLevel === "1"
+      ? { objective: addTmObjective.trim(), coworkers: addTmCoworkers.join(", "), deadline: addTmDeadline, desc: addTmDesc.trim() }
+      : {};
+    const result = await onAddTaskMaster(addTmLevel, addTmName.trim(), extra);
+    setAddTmLoading(false);
+    if (result?.success === false) {
+      setAddTmError("등록 오류: " + (result.message || "알 수 없는 오류"));
+      return;
+    }
+    resetAddTm();
+  }
+
+  function openAddTm(level) {
+    resetAddTm();
+    setAddTmLevel(level);
+  }
 
   function f(field, value) { setForm((p) => ({ ...p, [field]: value })); }
   const inp = (err) => ({ ...ms.input, ...(err ? ms.inputErr : {}), ...(readOnly ? ms.inputRO : {}) });
@@ -546,6 +767,92 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
   return (
     <div style={overlayStyle} onClick={readOnly ? onClose : undefined}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
+        {/* 업무구분 신규 등록 미니 팝업 */}
+        {addTmLevel && (
+          <div style={ms.miniOverlay} onClick={resetAddTm}>
+            <div style={{ ...ms.miniModal, ...(addTmLevel === "1" ? { maxWidth: "440px", width: "96%" } : {}) }} onClick={(e) => e.stopPropagation()}>
+              <div style={ms.miniHeader}>
+                <span style={ms.miniTitle}>업무구분{addTmLevel} 신규 등록</span>
+                <button style={ms.closeX} onClick={resetAddTm}>✕</button>
+              </div>
+              <div style={ms.miniBody}>
+                {/* 명칭 (공통) */}
+                <label style={ms.label}>업무구분{addTmLevel} 명칭 <span style={ms.req}>*</span></label>
+                <input
+                  style={ms.input} type="text" value={addTmName}
+                  placeholder={`업무구분${addTmLevel} 이름을 입력하세요`}
+                  autoFocus
+                  onChange={(e) => { setAddTmName(e.target.value); setAddTmError(""); }}
+                  onKeyDown={(e) => { if (e.key === "Enter" && addTmLevel === "2") handleAddTm(); }}
+                />
+
+                {/* 업무구분1 전용 추가 필드 */}
+                {addTmLevel === "1" && (
+                  <>
+                    {/* 목적 */}
+                    <label style={{ ...ms.label, marginTop: "10px" }}>목적</label>
+                    <input
+                      style={ms.input} type="text" value={addTmObjective}
+                      placeholder="목적을 입력하세요"
+                      onChange={(e) => setAddTmObjective(e.target.value)}
+                    />
+
+                    {/* 담당자 (중복 선택 가능) */}
+                    <label style={{ ...ms.label, marginTop: "10px" }}>
+                      담당자
+                      {addTmCoworkers.length > 0 && (
+                        <span style={{ marginLeft: "6px", color: "#2563EB", fontSize: "11px", fontWeight: "600" }}>
+                          {addTmCoworkers.length}명 선택
+                        </span>
+                      )}
+                    </label>
+                    <div style={ms.cwBox}>
+                      {deptUsers.length === 0 ? (
+                        <span style={{ fontSize: "12px", color: "#94A3B8" }}>부서 사용자 없음</span>
+                      ) : deptUsers.map((u) => {
+                        const checked = addTmCoworkers.includes(u.NAME);
+                        return (
+                          <label key={u.ID} style={{ ...ms.cwRow, background: checked ? "#EFF6FF" : "transparent" }}>
+                            <input
+                              type="checkbox" checked={checked}
+                              onChange={() => toggleCoworker(u.NAME)}
+                              style={{ marginRight: "7px", accentColor: "#2563EB" }}
+                            />
+                            <span style={{ fontSize: "13px", color: "#1E293B" }}>{u.NAME}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* 마감일자 */}
+                    <label style={{ ...ms.label, marginTop: "10px" }}>마감일자</label>
+                    <input
+                      style={ms.input} type="date" value={addTmDeadline}
+                      onChange={(e) => setAddTmDeadline(e.target.value)}
+                    />
+
+                    {/* 설명 */}
+                    <label style={{ ...ms.label, marginTop: "10px" }}>설명</label>
+                    <textarea
+                      style={{ ...ms.input, height: "70px", resize: "vertical" }}
+                      value={addTmDesc}
+                      placeholder="설명을 입력하세요"
+                      onChange={(e) => setAddTmDesc(e.target.value)}
+                    />
+                  </>
+                )}
+
+                {addTmError && <p style={ms.err}>{addTmError}</p>}
+              </div>
+              <div style={ms.miniFooter}>
+                <button style={ms.cancelBtn} onClick={resetAddTm}>취소</button>
+                <button style={ms.submitBtn} disabled={addTmLoading} onClick={handleAddTm}>
+                  {addTmLoading ? "등록 중..." : "등록"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div style={ms.header}>
           <span style={ms.title}>{title}</span>
           <button style={ms.closeX} onClick={onClose}>✕</button>
@@ -580,22 +887,59 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, readOnly,
           {/* 업무구분1 | 업무구분2 */}
           <div style={twoColStyle}>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분1</label>
-              <select style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
-                value={form.taskType1Cd} disabled={readOnly}
-                onChange={(e) => f("taskType1Cd", e.target.value)}>
-                <option value="">선택</option>
-                {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
-              </select>
+              <div style={ms.labelRow}>
+                <label style={ms.label}>업무구분1</label>
+                {!readOnly && onAddTaskMaster && (
+                  <button style={ms.addTmBtn} onClick={() => openAddTm("1")}>+ 신규</button>
+                )}
+              </div>
+              <TaskMasterSelect
+                value={form.taskType1Cd} options={tm1} readOnly={readOnly}
+                onChange={(v) => f("taskType1Cd", v)}
+                onDelete={onDeleteTaskMaster ? (id) => onDeleteTaskMaster("1", id) : null}
+              />
             </div>
             <div style={ms.fieldWrap}>
-              <label style={ms.label}>업무구분2</label>
-              <select style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
-                value={form.taskType2Cd} disabled={readOnly}
-                onChange={(e) => f("taskType2Cd", e.target.value)}>
-                <option value="">선택</option>
-                {tm2.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
-              </select>
+              <div style={ms.labelRow}>
+                <label style={ms.label}>업무구분2</label>
+                {!readOnly && onAddTaskMaster && (
+                  <button style={ms.addTmBtn} onClick={() => openAddTm("2")}>+ 신규</button>
+                )}
+              </div>
+              <TaskMasterSelect
+                value={form.taskType2Cd} options={tm2} readOnly={readOnly}
+                onChange={(v) => f("taskType2Cd", v)}
+                onDelete={onDeleteTaskMaster ? (id) => onDeleteTaskMaster("2", id) : null}
+              />
+            </div>
+          </div>
+          {/* 업무구분3 | 업무구분4 */}
+          <div style={twoColStyle}>
+            <div style={ms.fieldWrap}>
+              <div style={ms.labelRow}>
+                <label style={ms.label}>업무구분3</label>
+                {!readOnly && onAddTaskMaster && (
+                  <button style={ms.addTmBtn} onClick={() => openAddTm("3")}>+ 신규</button>
+                )}
+              </div>
+              <TaskMasterSelect
+                value={form.taskType3Cd} options={tm3} readOnly={readOnly}
+                onChange={(v) => f("taskType3Cd", v)}
+                onDelete={onDeleteTaskMaster ? (id) => onDeleteTaskMaster("3", id) : null}
+              />
+            </div>
+            <div style={ms.fieldWrap}>
+              <div style={ms.labelRow}>
+                <label style={ms.label}>업무구분4</label>
+                {!readOnly && onAddTaskMaster && (
+                  <button style={ms.addTmBtn} onClick={() => openAddTm("4")}>+ 신규</button>
+                )}
+              </div>
+              <TaskMasterSelect
+                value={form.taskType4Cd} options={tm4} readOnly={readOnly}
+                onChange={(v) => f("taskType4Cd", v)}
+                onDelete={onDeleteTaskMaster ? (id) => onDeleteTaskMaster("4", id) : null}
+              />
             </div>
           </div>
           {/* 중요도 (절반) */}
@@ -805,16 +1149,20 @@ const s = {
     color: "#FFFFFF", backgroundColor: "#DC2626", border: "none",
     borderRadius: "4px", padding: "3px 9px", cursor: "pointer",
   },
-  // 날짜 한 줄
-  dateRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px", marginTop: "2px" },
-  dateItem: { fontSize: "11px", color: "#94A3B8" },
-  dateSep: { fontSize: "10px", color: "#CBD5E1" },
+  // 날짜 그리드
+  dateGrid: { display: "flex", flexDirection: "column", gap: "3px", marginTop: "6px", paddingTop: "6px", borderTop: "1px solid #F1F5F9" },
+  dateCell: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" },
+  dateLbl:  { fontSize: "10px", fontWeight: "600", color: "#94A3B8", whiteSpace: "nowrap", minWidth: "56px" },
+  dateLblDeadline: { color: "#D97706" },
+  dateLblPlanned:  { color: "#3B82F6" },
+  dateLblDone:     { color: "#16A34A" },
+  dateVal:  { fontSize: "11px", color: "#64748B", fontVariantNumeric: "tabular-nums" },
 };
 
 const ms = {
   overlay: { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
   overlayMobile: { alignItems: "flex-end" },
-  modal: { backgroundColor: "#FFFFFF", borderRadius: "10px", width: "660px", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,0.15)" },
+  modal: { position: "relative", backgroundColor: "#FFFFFF", borderRadius: "10px", width: "660px", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 12px 40px rgba(0,0,0,0.15)" },
   modalMobile: { width: "100%", maxWidth: "100%", maxHeight: "92vh", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px 14px", borderBottom: "1px solid #E8E8E8", flexShrink: 0 },
   title:  { fontSize: "16px", fontWeight: "600", color: "#1E293B" },
@@ -855,6 +1203,57 @@ const ms = {
     fontFamily: "'Pretendard', sans-serif", fontSize: "12px", fontWeight: "600",
     color: "#FFFFFF", backgroundColor: "#DC2626", border: "none",
     borderRadius: "4px", padding: "4px 12px", cursor: "pointer", marginLeft: "4px",
+  },
+  // 업무구분 라벨 행 (라벨 + 신규 버튼)
+  labelRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" },
+  addTmBtn: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "11px", fontWeight: "600",
+    color: "#3A3A3A", backgroundColor: "#F1F5F9", border: "1px solid #CBD5E1",
+    borderRadius: "4px", padding: "2px 8px", cursor: "pointer", flexShrink: 0,
+  },
+  // 신규 등록 미니 팝업
+  miniOverlay: {
+    position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.35)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    borderRadius: "10px", zIndex: 10,
+  },
+  miniModal: {
+    backgroundColor: "#FFFFFF", borderRadius: "8px", width: "320px",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column",
+  },
+  miniHeader: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "14px 18px 12px", borderBottom: "1px solid #E8E8E8",
+  },
+  miniTitle: { fontSize: "14px", fontWeight: "600", color: "#1E293B" },
+  miniBody:  { padding: "16px 18px", display: "flex", flexDirection: "column", gap: "8px" },
+  miniFooter: { display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px 18px 16px", borderTop: "1px solid #E8E8E8" },
+  // 담당자 멀티체크박스
+  cwBox: {
+    border: "1px solid #D9D9D9", borderRadius: "6px", maxHeight: "120px",
+    overflowY: "auto", padding: "4px 0",
+  },
+  cwRow: {
+    display: "flex", alignItems: "center", padding: "6px 10px",
+    cursor: "pointer", borderRadius: "4px", margin: "1px 4px",
+  },
+  // 업무구분 커스텀 드롭다운
+  tmDropdown: {
+    position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
+    backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "6px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxHeight: "200px", overflowY: "auto",
+  },
+  tmOptionRow: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "8px 10px", cursor: "pointer",
+    borderBottom: "1px solid #F1F5F9",
+  },
+  tmOptionText: { fontSize: "13px", flex: 1, paddingRight: "6px" },
+  tmDeleteBtn: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "11px", fontWeight: "600",
+    color: "#94A3B8", backgroundColor: "transparent", border: "none",
+    borderRadius: "3px", padding: "1px 5px", cursor: "pointer", flexShrink: 0,
+    lineHeight: 1,
   },
 };
 
