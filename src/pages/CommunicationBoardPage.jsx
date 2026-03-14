@@ -3,154 +3,177 @@ import { useState } from "react";
 /* ─────────────── 섹션 정의 ─────────────── */
 const SECTIONS = [
   {
-    id:          "received",
-    title:       "내가 받은 요청",
-    emoji:       "📥",
-    noteBg:      "#FFFDE7",   // 연한 노랑
-    headerBg:    "#FFD600",
-    headerText:  "#5D4037",
-    pinColor:    "#F57F17",
-    tagBg:       "#FFF9C4",
-    tagColor:    "#795548",
-    accentColor: "#F9A825",
-    emptyMsg:    "받은 요청이 없습니다.",
-    emptyIcon:   "📭",
+    id:        "received",
+    title:     "내가 받은 요청",
+    sub:       "Requests Received",
+    accent:    "#3B82F6",
+    emptyMsg:  "받은 요청이 없습니다.",
+    emptyIcon: "inbox",
   },
   {
-    id:          "sent",
-    title:       "내가 한 요청",
-    emoji:       "📤",
-    noteBg:      "#F1FFF4",   // 연한 초록
-    headerBg:    "#43A047",
-    headerText:  "#E8F5E9",
-    pinColor:    "#2E7D32",
-    tagBg:       "#C8E6C9",
-    tagColor:    "#1B5E20",
-    accentColor: "#388E3C",
-    emptyMsg:    "한 요청이 없습니다.",
-    emptyIcon:   "📮",
+    id:        "sent",
+    title:     "내가 한 요청",
+    sub:       "Requests Sent",
+    accent:    "#10B981",
+    emptyMsg:  "한 요청이 없습니다.",
+    emptyIcon: "send",
   },
   {
-    id:          "manager",
-    title:       "팀장 요청내용",
-    emoji:       "👔",
-    noteBg:      "#EFF6FF",   // 연한 파랑
-    headerBg:    "#1E88E5",
-    headerText:  "#E3F2FD",
-    pinColor:    "#1565C0",
-    tagBg:       "#BBDEFB",
-    tagColor:    "#0D47A1",
-    accentColor: "#1976D2",
-    emptyMsg:    "팀장 요청이 없습니다.",
-    emptyIcon:   "📋",
+    id:        "manager",
+    title:     "팀장 요청내용",
+    sub:       "Manager Requests",
+    accent:    "#8B5CF6",
+    emptyMsg:  "팀장 요청이 없습니다.",
+    emptyIcon: "clipboard",
   },
   {
-    id:          "issue",
-    title:       "이슈내용",
-    emoji:       "🚨",
-    noteBg:      "#FFF5F5",   // 연한 빨강
-    headerBg:    "#E53935",
-    headerText:  "#FFEBEE",
-    pinColor:    "#B71C1C",
-    tagBg:       "#FFCDD2",
-    tagColor:    "#B71C1C",
-    accentColor: "#D32F2F",
-    emptyMsg:    "이슈 내용이 없습니다.",
-    emptyIcon:   "✅",
+    id:        "issue",
+    title:     "이슈내용",
+    sub:       "Issues",
+    accent:    "#EF4444",
+    emptyMsg:  "등록된 이슈가 없습니다.",
+    emptyIcon: "alert",
   },
 ];
+
+/* SVG 아이콘 */
+function Icon({ name, size = 20, color = "currentColor" }) {
+  const icons = {
+    inbox: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
+      </svg>
+    ),
+    send: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </svg>
+    ),
+    clipboard: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+      </svg>
+    ),
+    alert: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+    plus: (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    ),
+  };
+  return icons[name] ?? null;
+}
 
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 export default function CommunicationBoardPage() {
   const [hovered, setHovered] = useState(null);
 
-  /* 각 섹션의 아이템 수 (향후 실데이터 연동) */
+  /* 향후 실데이터 연동 */
   const counts = { received: 0, sent: 0, manager: 0, issue: 0 };
 
   return (
     <div style={s.wrap}>
+
       {/* ── 상단 헤더 ── */}
       <div style={s.topBar}>
-        <div style={s.titleArea}>
+        <div>
           <h2 style={s.pageTitle}>Communication Board</h2>
-          <span style={s.subTitle}>팀 소통 현황판</span>
+          <p style={s.pageDesc}>팀 내 요청 및 이슈를 한눈에 관리하세요.</p>
+        </div>
+        <div style={s.totalRow}>
+          {SECTIONS.map(sec => (
+            <div key={sec.id} style={s.totalChip}>
+              <span style={{ ...s.totalDot, backgroundColor: sec.accent }} />
+              <span style={s.totalLabel}>{sec.title}</span>
+              <span style={s.totalCount}>{counts[sec.id]}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── 코르크 보드 ── */}
-      <div style={s.board}>
-        {SECTIONS.map((sec) => {
+      {/* ── 2×2 그리드 ── */}
+      <div style={s.grid}>
+        {SECTIONS.map(sec => {
           const isHov = hovered === sec.id;
           return (
             <div
               key={sec.id}
               style={{
-                ...s.note,
-                backgroundColor: sec.noteBg,
+                ...s.card,
                 boxShadow: isHov
-                  ? `4px 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.12)`
-                  : `3px 5px 14px rgba(0,0,0,0.16), 0 1px 3px rgba(0,0,0,0.08)`,
-                transform: isHov ? "translateY(-4px) scale(1.01)" : "translateY(0) scale(1)",
+                  ? "0 4px 20px rgba(0,0,0,0.10)"
+                  : "0 1px 4px rgba(0,0,0,0.06)",
               }}
               onMouseEnter={() => setHovered(sec.id)}
               onMouseLeave={() => setHovered(null)}
             >
-              {/* 압정 (pin) */}
-              <div style={{ ...s.pin, background: `radial-gradient(circle at 35% 35%, ${sec.pinColor}cc, ${sec.pinColor})` }}>
-                <div style={s.pinShine} />
-              </div>
+              {/* 상단 액센트 바 */}
+              <div style={{ ...s.accentBar, backgroundColor: sec.accent }} />
 
-              {/* 헤더 */}
-              <div style={{ ...s.noteHeader, backgroundColor: sec.headerBg }}>
-                <div style={s.noteHeaderLeft}>
-                  <span style={s.noteEmoji}>{sec.emoji}</span>
-                  <span style={{ ...s.noteTitle, color: sec.headerText }}>{sec.title}</span>
+              {/* 카드 헤더 */}
+              <div style={s.cardHeader}>
+                <div style={s.cardHeaderLeft}>
+                  <div style={{ ...s.iconWrap, backgroundColor: sec.accent + "15" }}>
+                    <Icon name={sec.emptyIcon} size={16} color={sec.accent} />
+                  </div>
+                  <div>
+                    <div style={s.cardTitle}>{sec.title}</div>
+                    <div style={s.cardSub}>{sec.sub}</div>
+                  </div>
                 </div>
-                <div style={s.noteHeaderRight}>
+                <div style={s.cardHeaderRight}>
                   <span style={{
                     ...s.countBadge,
-                    backgroundColor: counts[sec.id] > 0 ? "#FFFFFF33" : "#FFFFFF22",
-                    color: sec.headerText,
+                    color:           counts[sec.id] > 0 ? sec.accent : "#94A3B8",
+                    backgroundColor: counts[sec.id] > 0 ? sec.accent + "15" : "#F1F5F9",
+                    borderColor:     counts[sec.id] > 0 ? sec.accent + "40" : "#E2E8F0",
                   }}>
                     {counts[sec.id]}건
                   </span>
                   <button
-                    style={{ ...s.addBtn, color: sec.headerText, borderColor: `${sec.headerText}55` }}
+                    style={{ ...s.addBtn, borderColor: isHov ? "#CBD5E1" : "#E2E8F0" }}
                     title="항목 추가"
                   >
-                    ＋
+                    <Icon name="plus" size={14} color="#64748B" />
                   </button>
                 </div>
               </div>
 
-              {/* 구분선 (테이프 효과) */}
-              <div style={{ ...s.tape, backgroundColor: sec.accentColor + "40" }} />
+              {/* 구분선 */}
+              <div style={s.divider} />
 
-              {/* 바디 */}
-              <div style={s.noteBody}>
+              {/* 카드 바디 */}
+              <div style={s.cardBody}>
                 {counts[sec.id] === 0 ? (
-                  /* 비어있을 때 */
                   <div style={s.emptyState}>
-                    <span style={s.emptyIcon}>{sec.emptyIcon}</span>
-                    <span style={s.emptyMsg}>{sec.emptyMsg}</span>
-                    <span style={s.emptyHint}>＋ 버튼을 눌러 추가해보세요</span>
+                    <div style={{ ...s.emptyIconWrap, backgroundColor: sec.accent + "10", border: `1px solid ${sec.accent}20` }}>
+                      <Icon name={sec.emptyIcon} size={22} color={sec.accent + "80"} />
+                    </div>
+                    <p style={s.emptyMsg}>{sec.emptyMsg}</p>
+                    <p style={s.emptyHint}>＋ 버튼으로 항목을 추가할 수 있습니다.</p>
                   </div>
                 ) : (
-                  /* 향후 아이템 목록 자리 */
                   <div style={s.itemList} />
                 )}
               </div>
 
-              {/* 하단 날짜 라인 */}
-              <div style={{ ...s.noteFooter, borderTopColor: sec.accentColor + "30" }}>
-                <span style={{ ...s.footerText, color: sec.accentColor }}>
-                  기능 준비 중...
+              {/* 카드 푸터 */}
+              <div style={s.cardFooter}>
+                <span style={s.footerStatus}>
+                  <span style={{ ...s.statusDot, backgroundColor: "#D1D5DB" }} />
+                  기능 준비 중
                 </span>
               </div>
-
-              {/* 접힌 모서리 효과 */}
-              <div style={{ ...s.corner, borderLeftColor: sec.noteBg, borderTopColor: sec.noteBg }} />
-              <div style={{ ...s.cornerShadow, backgroundColor: sec.accentColor + "25" }} />
             </div>
           );
         })}
@@ -167,130 +190,162 @@ const s = {
     flexDirection: "column",
     height: "100%",
     minHeight: 0,
+    gap: "16px",
   },
 
   /* 상단 헤더 */
   topBar: {
     display: "flex",
-    alignItems: "flex-end",
-    gap: "10px",
-    marginBottom: "16px",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: "12px",
     flexShrink: 0,
   },
-  titleArea: { display: "flex", alignItems: "baseline", gap: "10px" },
-  pageTitle: { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: 0 },
-  subTitle:  { fontSize: "12px", color: "#94A3B8", fontWeight: "400" },
+  pageTitle: {
+    fontSize: "18px",
+    fontWeight: "700",
+    color: "#1E293B",
+    margin: "0 0 3px 0",
+  },
+  pageDesc: {
+    fontSize: "12px",
+    color: "#94A3B8",
+    margin: 0,
+    fontWeight: "400",
+  },
+  totalRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    flexWrap: "wrap",
+  },
+  totalChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "6px",
+    padding: "5px 10px",
+  },
+  totalDot:   { width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0 },
+  totalLabel: { fontSize: "11px", color: "#64748B", fontWeight: "500", whiteSpace: "nowrap" },
+  totalCount: { fontSize: "11px", color: "#1E293B", fontWeight: "700" },
 
-  /* 코르크 보드 */
-  board: {
+  /* 2×2 그리드 */
+  grid: {
     flex: 1,
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gridTemplateRows: "1fr 1fr",
-    gap: "20px",
+    gap: "14px",
     minHeight: 0,
-    backgroundColor: "#C8A96E",
-    backgroundImage: [
-      "radial-gradient(ellipse at 20% 30%, rgba(255,255,255,0.06) 0%, transparent 60%)",
-      "radial-gradient(ellipse at 80% 70%, rgba(0,0,0,0.06) 0%, transparent 60%)",
-      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Ccircle cx='1' cy='1' r='0.6' fill='rgba(0,0,0,0.06)'/%3E%3C/svg%3E\")",
-    ].join(", "),
-    borderRadius: "12px",
-    padding: "28px",
-    border: "6px solid #A07840",
-    boxShadow: "inset 0 2px 8px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.12)",
   },
 
-  /* 포스트잇 노트 */
-  note: {
-    position: "relative",
+  /* 카드 */
+  card: {
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #E2E8F0",
+    borderRadius: "10px",
     display: "flex",
     flexDirection: "column",
-    borderRadius: "2px 8px 2px 2px",
     overflow: "hidden",
-    transition: "transform 0.18s ease, box-shadow 0.18s ease",
-    cursor: "default",
-    minHeight: "200px",
+    transition: "box-shadow 0.18s ease",
+    minHeight: 0,
   },
 
-  /* 압정 */
-  pin: {
-    position: "absolute",
-    top: "-8px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: "18px",
-    height: "18px",
-    borderRadius: "50%",
-    zIndex: 10,
-    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
-  },
-  pinShine: {
-    position: "absolute",
-    top: "3px",
-    left: "4px",
-    width: "5px",
-    height: "5px",
-    borderRadius: "50%",
-    backgroundColor: "rgba(255,255,255,0.55)",
+  /* 상단 액센트 바 (3px) */
+  accentBar: {
+    height: "3px",
+    flexShrink: 0,
   },
 
-  /* 헤더 */
-  noteHeader: {
+  /* 카드 헤더 */
+  cardHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "10px 14px 10px 14px",
-    marginTop: "6px",
+    padding: "14px 16px 12px",
     flexShrink: 0,
   },
-  noteHeaderLeft:  { display: "flex", alignItems: "center", gap: "8px" },
-  noteHeaderRight: { display: "flex", alignItems: "center", gap: "6px" },
-  noteEmoji: { fontSize: "17px", lineHeight: 1 },
-  noteTitle: { fontSize: "14px", fontWeight: "700", letterSpacing: "-0.01em" },
+  cardHeaderLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+  },
+  cardHeaderRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  iconWrap: {
+    width: "32px",
+    height: "32px",
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  cardTitle: {
+    fontSize: "14px",
+    fontWeight: "700",
+    color: "#1E293B",
+    lineHeight: "1.2",
+  },
+  cardSub: {
+    fontSize: "10px",
+    fontWeight: "500",
+    color: "#94A3B8",
+    marginTop: "1px",
+    letterSpacing: "0.02em",
+  },
 
+  /* 건수 뱃지 */
   countBadge: {
     fontSize: "11px",
     fontWeight: "700",
-    padding: "2px 9px",
+    padding: "3px 9px",
     borderRadius: "20px",
-    minWidth: "28px",
-    textAlign: "center",
-  },
-  addBtn: {
-    fontFamily: "'Pretendard', sans-serif",
-    fontSize: "16px",
-    fontWeight: "400",
-    background: "rgba(255,255,255,0.25)",
     border: "1px solid",
-    borderRadius: "5px",
+    whiteSpace: "nowrap",
+  },
+
+  /* + 버튼 */
+  addBtn: {
     width: "28px",
     height: "28px",
+    borderRadius: "6px",
+    border: "1px solid",
+    backgroundColor: "#FFFFFF",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
-    lineHeight: 1,
-    transition: "background 0.12s",
-  },
-
-  /* 테이프 */
-  tape: {
-    height: "4px",
+    transition: "border-color 0.12s, background-color 0.12s",
     flexShrink: 0,
   },
 
-  /* 바디 */
-  noteBody: {
-    flex: 1,
-    padding: "14px 16px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    overflowY: "auto",
+  /* 구분선 */
+  divider: {
+    height: "1px",
+    backgroundColor: "#F1F5F9",
+    flexShrink: 0,
+    margin: "0 16px",
   },
 
-  /* 비어있는 상태 */
+  /* 카드 바디 */
+  cardBody: {
+    flex: 1,
+    padding: "0 16px",
+    overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0,
+  },
+
+  /* 빈 상태 */
   emptyState: {
     flex: 1,
     display: "flex",
@@ -298,45 +353,43 @@ const s = {
     alignItems: "center",
     justifyContent: "center",
     gap: "8px",
-    padding: "20px 0",
+    padding: "24px 16px",
+    textAlign: "center",
   },
-  emptyIcon: { fontSize: "32px", lineHeight: 1, opacity: 0.55 },
-  emptyMsg:  { fontSize: "13px", color: "#94A3B8", fontWeight: "500" },
-  emptyHint: { fontSize: "11px", color: "#B0BEC5", fontWeight: "400" },
+  emptyIconWrap: {
+    width: "48px",
+    height: "48px",
+    borderRadius: "12px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: "4px",
+  },
+  emptyMsg:  { fontSize: "13px", color: "#64748B", fontWeight: "500", margin: 0 },
+  emptyHint: { fontSize: "11px", color: "#CBD5E1", fontWeight: "400", margin: 0 },
 
   itemList: { flex: 1 },
 
-  /* 하단 */
-  noteFooter: {
-    padding: "7px 16px",
-    borderTop: "1px solid",
+  /* 카드 푸터 */
+  cardFooter: {
+    padding: "8px 16px",
+    borderTop: "1px solid #F8FAFC",
     flexShrink: 0,
     display: "flex",
     alignItems: "center",
-    justifyContent: "flex-end",
   },
-  footerText: { fontSize: "10px", fontWeight: "500", opacity: 0.7 },
-
-  /* 접힌 모서리 */
-  corner: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 0,
-    height: 0,
-    borderStyle: "solid",
-    borderWidth: "0 0 22px 22px",
-    borderLeftColor: "transparent",
-    borderTopColor: "transparent",
-    borderRightColor: "transparent",
-    borderBottomColor: "rgba(0,0,0,0.15)",
+  footerStatus: {
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    fontSize: "10px",
+    color: "#CBD5E1",
+    fontWeight: "500",
   },
-  cornerShadow: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: "22px",
-    height: "22px",
-    clipPath: "polygon(100% 0, 100% 100%, 0 100%)",
+  statusDot: {
+    width: "5px",
+    height: "5px",
+    borderRadius: "50%",
+    flexShrink: 0,
   },
 };
