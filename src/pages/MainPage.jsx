@@ -8,9 +8,10 @@ import DailyScrumboardPage from "./DailyScrumboardPage";
 import AIWeeklyReportPage from "./AIWeeklyReportPage";
 import YearlyTaskBoardPage from "./YearlyTaskBoardPage";
 import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
+import CommunicationBoardPage from "./CommunicationBoardPage";
 
 const MENU_ITEMS = [
-  { id: "dashboard",    label: "Dashboard",          emoji: "◈" },
+  { id: "dashboard",    label: "Communication Board", emoji: "◈" },
   { id: "scrumboard",   label: "Daily Scrumboard",    emoji: "▦" },
   { id: "yearly-board", label: "Yearly Task Board",   emoji: "◻" },
   { id: "weekly-board", label: "Weekly Task Board",   emoji: "▤" },
@@ -141,6 +142,8 @@ function MainPage() {
 
           {activeMenu === "user-mgmt" ? (
             <UserManagementPage />
+          ) : activeMenu === "dashboard" ? (
+            <CommunicationBoardPage />
           ) : activeMenu === "scrumboard" ? (
             <DailyScrumboardPage />
           ) : activeMenu === "yearly-board" ? (
