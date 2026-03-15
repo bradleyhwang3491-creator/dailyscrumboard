@@ -153,12 +153,12 @@ function ReceivedItem({ item, userMap, onReply }) {
 }
 
 /* ─────────────── 보낸 요청 카드 아이템 ─────────────── */
-function SentItem({ item, userMap }) {
+function SentItem({ item, userMap, onEdit }) {
   const toName  = userMap[item.REQUEST_TO_ID] ?? item.REQUEST_TO_ID;
   const replied = !!item.REPLY_CONTEXT;
 
   return (
-    <div style={s.reqItem}>
+    <div style={{ ...s.reqItem, cursor: "pointer" }} onClick={() => onEdit(item)}>
       <div style={s.reqMetaRow}>
         <div style={s.reqAvatarWrap}>
           <div style={{ ...s.reqAvatar, backgroundColor: "#10B98120", color: "#10B981" }}>
@@ -252,11 +252,13 @@ export default function CommunicationBoardPage() {
     COMPLETE: t("common.complete"),
   };
 
-  const [hovered,          setHovered]          = useState(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [showReplyModal,   setShowReplyModal]   = useState(false);
-  const [replyTarget,      setReplyTarget]      = useState(null);
-  const [selectedTask,     setSelectedTask]     = useState(null);
+  const [hovered,             setHovered]             = useState(null);
+  const [showRequestModal,    setShowRequestModal]    = useState(false);
+  const [showReplyModal,      setShowReplyModal]      = useState(false);
+  const [replyTarget,         setReplyTarget]         = useState(null);
+  const [selectedTask,        setSelectedTask]        = useState(null);
+  const [showEditSentModal,   setShowEditSentModal]   = useState(false);
+  const [editSentTarget,      setEditSentTarget]      = useState(null);
 
   /* 데이터 상태 */
   const [received,        setReceived]        = useState([]);
@@ -388,7 +390,12 @@ export default function CommunicationBoardPage() {
       if (loadingSent) return <LoadingState label={t("common.loading")} />;
       if (sent.length === 0) return <EmptyState sec={sec} />;
       return sent.map(item => (
-        <SentItem key={item.TASK_REQUEST_ID} item={item} userMap={userMap} />
+        <SentItem
+          key={item.TASK_REQUEST_ID}
+          item={item}
+          userMap={userMap}
+          onEdit={i => { setEditSentTarget(i); setShowEditSentModal(true); }}
+        />
       ));
     }
     if (sec.id === "manager") {
@@ -527,6 +534,17 @@ export default function CommunicationBoardPage() {
           userMap={userMap}
           onClose={() => { setShowReplyModal(false); setReplyTarget(null); }}
           onSuccess={handleReplySuccess}
+        />
+      )}
+
+      {/* ── 내가 한 요청 수정 팝업 ── */}
+      {showEditSentModal && editSentTarget && (
+        <EditSentModal
+          user={user}
+          item={editSentTarget}
+          userMap={userMap}
+          onClose={() => { setShowEditSentModal(false); setEditSentTarget(null); }}
+          onSuccess={() => { setShowEditSentModal(false); setEditSentTarget(null); fetchSent(); }}
         />
       )}
 
@@ -679,6 +697,191 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
           <div style={vs.footerRight}>
             <button style={vs.cancelBtn} onClick={onClose}>{t("common.close")}</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ 내가 한 요청 수정 팝업 ═══════════════════════ */
+function EditSentModal({ user, item, userMap, onClose, onSuccess }) {
+  const { t } = useLanguage();
+  const replied = !!item.REPLY_CONTEXT;
+
+  const [form,       setForm]       = useState({
+    title:      item.REQUEST_TITLE   ?? "",
+    toUserId:   item.REQUEST_TO_ID   ?? "",
+    toUserName: userMap[item.REQUEST_TO_ID] ?? item.REQUEST_TO_ID ?? "",
+    context:    item.REQUEST_CONTEXT ?? "",
+  });
+  const [errors,     setErrors]     = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [deptUsers,  setDeptUsers]  = useState([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchText, setSearchText] = useState("");
+
+  useEffect(() => {
+    async function fetchUsers() {
+      const dept = user?.deptCd;
+      if (!dept) return;
+      const { data } = await supabase
+        .from("SCRUMBOARD_USER")
+        .select("ID,NAME,DEPT_CD")
+        .eq("DEPT_CD", dept);
+      setDeptUsers((data ?? []).filter(u => u.ID !== user?.id));
+    }
+    fetchUsers();
+  }, [user]);
+
+  const filteredUsers = deptUsers.filter(u =>
+    !searchText.trim() || u.NAME?.includes(searchText.trim())
+  );
+
+  function setField(field, value) {
+    setForm(p => ({ ...p, [field]: value }));
+    setErrors(p => ({ ...p, [field]: "" }));
+  }
+
+  function validate() {
+    const errs = {};
+    if (!form.title.trim())   errs.title    = "제목을 입력하세요.";
+    if (!form.toUserId)       errs.toUserId = "수신자를 선택하세요.";
+    if (!form.context.trim()) errs.context  = "요청내용을 입력하세요.";
+    return errs;
+  }
+
+  async function handleSubmit() {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("TASK_BOARD_REQUEST")
+        .update({
+          REQUEST_TITLE:   form.title.trim(),
+          REQUEST_TO_ID:   form.toUserId,
+          REQUEST_CONTEXT: form.context.trim(),
+        })
+        .eq("TASK_REQUEST_ID", item.TASK_REQUEST_ID);
+      if (error) throw error;
+      onSuccess();
+    } catch (err) {
+      setErrors({ submit: `저장 중 오류가 발생했습니다. (${err?.message ?? "알 수 없는 오류"})` });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div style={ms.overlay} onClick={onClose}>
+      <div style={ms.modal} onClick={e => e.stopPropagation()}>
+        <div style={ms.header}>
+          <div>
+            <span style={ms.title}>요청 수정</span>
+            {replied && (
+              <div style={{ fontSize: "11px", color: "#F59E0B", marginTop: "2px" }}>
+                ⚠ 이미 답변이 등록된 요청입니다.
+              </div>
+            )}
+          </div>
+          <button style={ms.closeX} onClick={onClose}>✕</button>
+        </div>
+        <div style={ms.body}>
+          {/* 제목 */}
+          <div style={ms.fieldWrap}>
+            <label style={ms.label}>제목 <span style={ms.req}>*</span></label>
+            <input
+              style={{ ...ms.input, ...(errors.title ? ms.inputErr : {}) }}
+              type="text"
+              placeholder="요청 제목을 입력하세요"
+              value={form.title}
+              autoFocus
+              onChange={e => setField("title", e.target.value)}
+            />
+            {errors.title && <p style={ms.err}>{errors.title}</p>}
+          </div>
+          {/* 수신자 */}
+          <div style={ms.fieldWrap}>
+            <label style={ms.label}>수신자 <span style={ms.req}>*</span></label>
+            <div style={ms.recipientRow}>
+              <input
+                style={{ ...ms.input, ...(errors.toUserId ? ms.inputErr : {}), flex: 1, backgroundColor: "#F8FAFC", cursor: "default", color: form.toUserName ? "#1E293B" : "#94A3B8" }}
+                type="text"
+                placeholder="돋보기 버튼으로 사용자를 선택하세요"
+                value={form.toUserName}
+                readOnly
+              />
+              <button
+                style={{ ...ms.searchBtn, ...(showSearch ? ms.searchBtnActive : {}) }}
+                onClick={() => { setShowSearch(v => !v); setSearchText(""); }}
+                title="사용자 검색"
+              >
+                <Icon name="search" size={15} color={showSearch ? "#FFFFFF" : "#475569"} />
+              </button>
+            </div>
+            {errors.toUserId && <p style={ms.err}>{errors.toUserId}</p>}
+            {showSearch && (
+              <div style={ms.searchBox}>
+                <div style={ms.searchInputWrap}>
+                  <Icon name="search" size={14} color="#94A3B8" />
+                  <input
+                    style={ms.searchInput}
+                    type="text"
+                    placeholder="이름으로 검색"
+                    value={searchText}
+                    autoFocus
+                    onChange={e => setSearchText(e.target.value)}
+                  />
+                </div>
+                <div style={ms.userList}>
+                  {filteredUsers.length === 0 ? (
+                    <div style={ms.userEmpty}>
+                      {deptUsers.length === 0 ? "같은 부서 사용자가 없습니다." : "검색 결과가 없습니다."}
+                    </div>
+                  ) : (
+                    filteredUsers.map(u => {
+                      const selected = form.toUserId === u.ID;
+                      return (
+                        <div
+                          key={u.ID}
+                          style={{ ...ms.userItem, ...(selected ? ms.userItemSelected : {}) }}
+                          onClick={() => { setField("toUserId", u.ID); setField("toUserName", u.NAME); setShowSearch(false); setSearchText(""); }}
+                        >
+                          <div style={{ ...ms.userAvatar, backgroundColor: selected ? "#1E293B" : "#E2E8F0", color: selected ? "#FFFFFF" : "#475569" }}>
+                            {u.NAME?.charAt(0) ?? "?"}
+                          </div>
+                          <span style={{ ...ms.userName, fontWeight: selected ? "700" : "500", color: selected ? "#1E293B" : "#475569" }}>{u.NAME}</span>
+                          {selected && <span style={ms.selectedCheck}>✓</span>}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* 요청내용 */}
+          <div style={ms.fieldWrap}>
+            <label style={ms.label}>요청내용 <span style={ms.req}>*</span></label>
+            <textarea
+              style={{ ...ms.textarea, ...(errors.context ? ms.inputErr : {}) }}
+              placeholder="요청 내용을 자세히 입력하세요"
+              value={form.context}
+              onChange={e => setField("context", e.target.value)}
+            />
+            {errors.context && <p style={ms.err}>{errors.context}</p>}
+          </div>
+          {errors.submit && <p style={{ ...ms.err, marginTop: 0 }}>{errors.submit}</p>}
+        </div>
+        <div style={ms.footer}>
+          <button style={ms.cancelBtn} onClick={onClose}>{t("common.close")}</button>
+          <button
+            style={{ ...ms.submitBtn, opacity: submitting ? 0.7 : 1 }}
+            disabled={submitting}
+            onClick={handleSubmit}
+          >
+            {submitting ? t("common.saving") : t("common.save")}
+          </button>
         </div>
       </div>
     </div>
