@@ -198,6 +198,8 @@ export const en = {
     noCategory: "Unclassified",
     noData: "No tasks found for the selected filters.",
     taskCount: " task(s)",
+    viewMonthly: "Monthly",
+    viewWeekly: "Weekly",
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   },
 

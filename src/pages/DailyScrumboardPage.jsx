@@ -27,6 +27,7 @@ const INIT_FORM = {
   status: "TODO",
   priority: "하",
   relatedLink: "",
+  coworkerIds: [],  // 협업 동료 ID 배열
 };
 
 /* ─────────────────────────── 헬퍼 ─────────────────────────── */
@@ -136,27 +137,43 @@ function DailyScrumboardPage() {
     let q = supabase.from("TASK_BOARD").select("*").order("BOARD_ID", { ascending: false });
     if (user?.deptCd) q = q.eq("DEPT_CD", user.deptCd);
     const { data } = await q;
-    if (data) {
-      setTasks(data.map((t) => ({
-        id:           t.BOARD_ID,
-        title:        t.TITLE ?? "",
-        regDate:      fromDate8(t.INSERT_DATE),
-        taskType1Cd:  t.TASK_GUBUN1 ?? "",
-        taskType2Cd:  t.TASK_GUBUN2 ?? "",
-        taskType3Cd:  t.TASK_GUBUN3 ?? "",
-        taskType4Cd:  t.TASK_GUBUN4 ?? "",
-        content:      t.TASK_CONTENT ?? "",
-        teamNote:     t.LEADER_KNOW ?? "",
-        issue:        t.ISSUE ?? "",
-        plannedEnd:   fromDate8(t.DUE_EXPECT_DATE),
-        actualEnd:    fromDate8(t.COMPLETE_DATE),
-        status:          t.STATUS ?? "TODO",
-        priority:        t.IMPORTANT_GUBUN ?? "일반",
-        relatedLink:     t.PAGE_URL ?? "",
-        registrantId:    t.ID ?? "",
-        issueCompleteYn: t.ISSUE_COMPLETE_YN ?? "N",
-      })));
+    if (!data) return;
+
+    // 협업 동료 bulk 로드
+    const boardIds = data.map((t) => t.BOARD_ID);
+    let cwMap = {};
+    if (boardIds.length > 0) {
+      const { data: cwData } = await supabase
+        .from("TASK_BOARD_COWORKER")
+        .select("BOARD_ID, COWORKER_ID, SEQ_NO")
+        .in("BOARD_ID", boardIds)
+        .order("SEQ_NO");
+      (cwData || []).forEach((r) => {
+        if (!cwMap[r.BOARD_ID]) cwMap[r.BOARD_ID] = [];
+        cwMap[r.BOARD_ID].push(r.COWORKER_ID);
+      });
     }
+
+    setTasks(data.map((t) => ({
+      id:           t.BOARD_ID,
+      title:        t.TITLE ?? "",
+      regDate:      fromDate8(t.INSERT_DATE),
+      taskType1Cd:  t.TASK_GUBUN1 ?? "",
+      taskType2Cd:  t.TASK_GUBUN2 ?? "",
+      taskType3Cd:  t.TASK_GUBUN3 ?? "",
+      taskType4Cd:  t.TASK_GUBUN4 ?? "",
+      content:      t.TASK_CONTENT ?? "",
+      teamNote:     t.LEADER_KNOW ?? "",
+      issue:        t.ISSUE ?? "",
+      plannedEnd:   fromDate8(t.DUE_EXPECT_DATE),
+      actualEnd:    fromDate8(t.COMPLETE_DATE),
+      status:          t.STATUS ?? "TODO",
+      priority:        t.IMPORTANT_GUBUN ?? "일반",
+      relatedLink:     t.PAGE_URL ?? "",
+      registrantId:    t.ID ?? "",
+      issueCompleteYn: t.ISSUE_COMPLETE_YN ?? "N",
+      coworkerIds:     cwMap[t.BOARD_ID] || [],
+    })));
   }
 
   /** 조회 조건 적용 */
@@ -173,7 +190,7 @@ function DailyScrumboardPage() {
     if (!regForm.title.trim()) { setRegErrors({ title: t("daily.modal.errTitle") }); return; }
     setRegLoading(true);
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const { error } = await supabase.from("TASK_BOARD").insert({
+    const { data: insertedData, error } = await supabase.from("TASK_BOARD").insert({
       TITLE:            regForm.title.trim(),
       INSERT_DATE:      today,
       ID:               user?.id   ?? "",
@@ -191,15 +208,33 @@ function DailyScrumboardPage() {
       STATUS:           regForm.status,
       IMPORTANT_GUBUN:  regForm.priority,
       PAGE_URL:         regForm.relatedLink,
-    });
+    }).select("BOARD_ID");
     setRegLoading(false);
     if (error) { setRegErrors({ submit: "등록 오류: " + error.message }); return; }
+    // 협업 동료 저장
+    const newBoardId = insertedData?.[0]?.BOARD_ID;
+    if (newBoardId && regForm.coworkerIds?.length > 0) {
+      await supabase.from("TASK_BOARD_COWORKER").insert(
+        regForm.coworkerIds.map((id, idx) => ({ BOARD_ID: newBoardId, SEQ_NO: idx + 1, COWORKER_ID: id }))
+      );
+    }
     setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({});
     fetchTasks();
   }
 
   /* ── 상세 열기 ── */
-  function openDetail(task) { setDetailTask(task); setEditForm({ ...task }); setIsEditing(false); }
+  async function openDetail(task) {
+    const { data: cwData } = await supabase
+      .from("TASK_BOARD_COWORKER")
+      .select("COWORKER_ID, SEQ_NO")
+      .eq("BOARD_ID", task.id)
+      .order("SEQ_NO");
+    const coworkerIds = (cwData || []).map((r) => r.COWORKER_ID);
+    const enriched = { ...task, coworkerIds };
+    setDetailTask(enriched);
+    setEditForm({ ...enriched });
+    setIsEditing(false);
+  }
 
   /* ── 수정 저장 ── */
   async function handleUpdate() {
@@ -220,6 +255,15 @@ function DailyScrumboardPage() {
       IMPORTANT_GUBUN: editForm.priority,
       PAGE_URL:        editForm.relatedLink,
     }).eq("BOARD_ID", editForm.id);
+    if (!error) {
+      // 협업 동료 업데이트: 기존 삭제 후 재등록
+      await supabase.from("TASK_BOARD_COWORKER").delete().eq("BOARD_ID", editForm.id);
+      if (editForm.coworkerIds?.length > 0) {
+        await supabase.from("TASK_BOARD_COWORKER").insert(
+          editForm.coworkerIds.map((id, idx) => ({ BOARD_ID: editForm.id, SEQ_NO: idx + 1, COWORKER_ID: id }))
+        );
+      }
+    }
     setEditLoading(false);
     if (error) { console.error("수정 오류:", error.message); return; }
     closeDetail(); fetchTasks();
@@ -439,7 +483,7 @@ function DailyScrumboardPage() {
                 ) : (
                   colTasks.map((task) => (
                     <TaskCard
-                      key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap}
+                      key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap} deptUsers={deptUsers}
                       onClick={openDetail}
                       onResolveIssue={handleResolveIssue}
                       isDragging={false}
@@ -478,7 +522,7 @@ function DailyScrumboardPage() {
                     ) : (
                       colTasks.map((task) => (
                         <TaskCard
-                          key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap}
+                          key={task.id} task={task} tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} userMap={userMap} deptUsers={deptUsers}
                           onClick={openDetail}
                           onResolveIssue={handleResolveIssue}
                           isDragging={dragCardId === task.id}
@@ -803,7 +847,7 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
 }
 
 /* ═══════════════════════ 카드 ═══════════════════════ */
-function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
+function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, deptUsers = [], onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
   const { t } = useLanguage();
   const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES["하"];
   const tm1Item  = tm1.find((t) => String(t.TASK_ID) === String(task.taskType1Cd));
@@ -815,6 +859,9 @@ function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onReso
   const registrantName = userMap[task.registrantId] || task.registrantId || "";
   const hasIssue    = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
+  const coworkerNames = (task.coworkerIds || [])
+    .map((id) => deptUsers.find((u) => u.ID === id)?.NAME ?? userMap[id] ?? null)
+    .filter(Boolean);
 
   return (
     <div
@@ -866,6 +913,16 @@ function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, onClick, onReso
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* 협업 동료 */}
+      {coworkerNames.length > 0 && (
+        <div style={s.cardCwRow}>
+          <span style={s.cardCwLabel}>🤝</span>
+          {coworkerNames.map((name) => (
+            <span key={name} style={s.cardCwChip}>{name}</span>
+          ))}
         </div>
       )}
 
@@ -1030,6 +1087,9 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
 
     const line = (label, value) => value?.trim() ? `${label}: ${value.trim()}` : null;
     const sep  = "─".repeat(32);
+    const cwNames = (form.coworkerIds || [])
+      .map((id) => deptUsers.find((u) => u.ID === id)?.NAME ?? id)
+      .filter(Boolean);
 
     const parts = [
       "■ 업무 상세",
@@ -1040,6 +1100,7 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
       line("등록일자",       form.regDate),
       line("업무구분1",      type1Nm),
       line("업무구분2",      type2Nm),
+      cwNames.length > 0 ? `협업 동료: ${cwNames.join(", ")}` : null,
       line("작업완료예정일", form.plannedEnd),
       line("작업완료일",     form.actualEnd),
       line("연관페이지링크", form.relatedLink),
@@ -1308,6 +1369,50 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
               </div>
             )}
           </div>
+          {/* 협업 동료 */}
+          <div style={ms.fullRow}>
+            <label style={ms.label}>
+              협업 동료
+              {!readOnly && (form.coworkerIds || []).length > 0 && (
+                <span style={{ marginLeft: "6px", color: "#2563EB", fontSize: "11px", fontWeight: "600" }}>
+                  {(form.coworkerIds || []).length}명 선택
+                </span>
+              )}
+            </label>
+            {readOnly ? (
+              <div style={ms.cwChipRow}>
+                {(form.coworkerIds || []).length === 0 ? (
+                  <span style={{ fontSize: "13px", color: "#94A3B8" }}>없음</span>
+                ) : (
+                  deptUsers
+                    .filter((u) => (form.coworkerIds || []).includes(u.ID))
+                    .map((u) => <span key={u.ID} style={ms.cwChip}>{u.NAME}</span>)
+                )}
+              </div>
+            ) : (
+              <div style={ms.cwBox}>
+                {deptUsers.length === 0 ? (
+                  <span style={{ fontSize: "12px", color: "#94A3B8", padding: "8px 12px", display: "block" }}>같은 부서 사용자 없음</span>
+                ) : deptUsers.map((u) => {
+                  const checked = (form.coworkerIds || []).includes(u.ID);
+                  return (
+                    <label key={u.ID} style={{ ...ms.cwRow, background: checked ? "#EFF6FF" : "transparent" }}>
+                      <input
+                        type="checkbox" checked={checked}
+                        onChange={() => {
+                          const cur = form.coworkerIds || [];
+                          f("coworkerIds", checked ? cur.filter((id) => id !== u.ID) : [...cur, u.ID]);
+                        }}
+                        style={{ marginRight: "7px", accentColor: "#2563EB" }}
+                      />
+                      <span style={{ fontSize: "13px", color: "#1E293B" }}>{u.NAME}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* 예정일 | 완료일 */}
           <div style={ms.twoCol}>
             <div style={ms.fieldWrap}>
@@ -1460,6 +1565,14 @@ const s = {
     color: "#FFFFFF", backgroundColor: "#DC2626", border: "none",
     borderRadius: "4px", padding: "3px 9px", cursor: "pointer",
   },
+  // 협업 동료 (카드)
+  cardCwRow: { display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px", margin: "5px 0" },
+  cardCwLabel: { fontSize: "11px", color: "#64748B", flexShrink: 0 },
+  cardCwChip: {
+    fontSize: "11px", fontWeight: "500", color: "#1D4ED8",
+    backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE",
+    borderRadius: "10px", padding: "1px 7px",
+  },
   // 날짜 그리드
   dateGrid: { display: "flex", flexDirection: "column", gap: "3px", marginTop: "6px", paddingTop: "6px", borderTop: "1px solid #F1F5F9" },
   dateCell: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" },
@@ -1547,6 +1660,13 @@ const ms = {
   cwRow: {
     display: "flex", alignItems: "center", padding: "6px 10px",
     cursor: "pointer", borderRadius: "4px", margin: "1px 4px",
+  },
+  // 협업 동료 칩 (readOnly 표시)
+  cwChipRow: { display: "flex", flexWrap: "wrap", gap: "6px", padding: "6px 0" },
+  cwChip: {
+    fontSize: "12px", fontWeight: "500", color: "#1D4ED8",
+    backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE",
+    borderRadius: "12px", padding: "3px 10px",
   },
   // 업무구분 커스텀 드롭다운
   tmDropdown: {

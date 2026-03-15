@@ -194,10 +194,13 @@ export const ko = {
     title: "Gantt Chart",
     year: "연도",
     assignee: "담당자",
+    tm1Coworker: "업무구분1 담당자",
     taskTitle: "업무",
     noCategory: "미분류",
     noData: "조회 조건에 해당하는 업무가 없습니다.",
     taskCount: "건",
+    viewMonthly: "월별",
+    viewWeekly: "주차별",
     months: ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"],
   },
 

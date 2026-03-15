@@ -37,3 +37,5 @@ pnpm-debug.log*
 
 # Claude 설정
 .claude/
+
+.vercel
