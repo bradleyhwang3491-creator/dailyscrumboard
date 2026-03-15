@@ -57,6 +57,7 @@ export const en = {
     menus: {
       communicationBoard: "Communication Board",
       dailyScrumboard: "Daily Scrumboard",
+      ganttChart: "Gantt Chart",
       yearlyTaskBoard: "Yearly Task Board",
       yearlyTaskBoardCRM: "Yearly Task Board(CRM)",
       weeklyTaskBoard: "Weekly Task Board",
@@ -187,6 +188,17 @@ export const en = {
     noSent: "No requests sent.",
     noManagerReq: "No manager requests.",
     noIssues: "No issues registered.",
+  },
+
+  gantt: {
+    title: "Gantt Chart",
+    year: "Year",
+    assignee: "Assignee",
+    taskTitle: "Task",
+    noCategory: "Unclassified",
+    noData: "No tasks found for the selected filters.",
+    taskCount: " task(s)",
+    months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   },
 
   userMgmt: {

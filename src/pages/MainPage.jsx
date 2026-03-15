@@ -11,6 +11,7 @@ import YearlyTaskBoardPage from "./YearlyTaskBoardPage";
 import YearlyTaskBoardCRMPage from "./YearlyTaskBoardCRMPage";
 import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
 import CommunicationBoardPage from "./CommunicationBoardPage";
+import GanttChartPage from "./GanttChartPage";
 
 const ADMIN_ID = "SUNGHYUN_HWANG";
 const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
@@ -124,6 +125,7 @@ function MainPage() {
   const MENU_ITEMS = [
     { id: "dashboard",        label: t("nav.menus.communicationBoard"),    emoji: "◈" },
     { id: "scrumboard",       label: t("nav.menus.dailyScrumboard"),       emoji: "▦" },
+    { id: "gantt",            label: t("nav.menus.ganttChart"),            emoji: "▬" },
     { id: "yearly-board",     label: t("nav.menus.yearlyTaskBoard"),       emoji: "◻" },
     { id: "yearly-board-crm", label: t("nav.menus.yearlyTaskBoardCRM"),   emoji: "◈", crmOnly: true },
     { id: "weekly-board",     label: t("nav.menus.weeklyTaskBoard"),       emoji: "▤" },
@@ -246,6 +248,8 @@ function MainPage() {
             <CommunicationBoardPage />
           ) : activeMenu === "scrumboard" ? (
             <DailyScrumboardPage />
+          ) : activeMenu === "gantt" ? (
+            <GanttChartPage />
           ) : activeMenu === "yearly-board" ? (
             <YearlyTaskBoardPage />
           ) : activeMenu === "yearly-board-crm" ? (
