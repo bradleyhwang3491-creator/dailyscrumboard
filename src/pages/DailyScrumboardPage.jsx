@@ -256,11 +256,19 @@ function DailyScrumboardPage() {
       PAGE_URL:        editForm.relatedLink,
     }).eq("BOARD_ID", editForm.id);
     if (!error) {
-      // 협업 동료 업데이트: 기존 삭제 후 재등록
-      await supabase.from("TASK_BOARD_COWORKER").delete().eq("BOARD_ID", editForm.id);
-      if (editForm.coworkerIds?.length > 0) {
+      // 협업 동료 업데이트
+      const existingCoworkerIds = detailTask?.coworkerIds || [];
+      const newCoworkerIds = editForm.coworkerIds || [];
+
+      if (existingCoworkerIds.length > 0) {
+        // 기존 데이터 있으면 먼저 삭제
+        await supabase.from("TASK_BOARD_COWORKER").delete().eq("BOARD_ID", editForm.id);
+      }
+
+      if (newCoworkerIds.length > 0) {
+        // 최종 수정 데이터 insert
         await supabase.from("TASK_BOARD_COWORKER").insert(
-          editForm.coworkerIds.map((id, idx) => ({ BOARD_ID: editForm.id, SEQ_NO: idx + 1, COWORKER_ID: id }))
+          newCoworkerIds.map((id, idx) => ({ BOARD_ID: editForm.id, SEQ_NO: idx + 1, COWORKER_ID: id }))
         );
       }
     }
