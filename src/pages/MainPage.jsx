@@ -115,7 +115,7 @@ function MainPage() {
   const { t } = useLanguage();
   const isMobile = useBreakpoint(768);
 
-  const [activeMenu,  setActiveMenu]  = useState(null);
+  const [activeMenu,  setActiveMenu]  = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const deptNm = user?.deptNm ?? "";
