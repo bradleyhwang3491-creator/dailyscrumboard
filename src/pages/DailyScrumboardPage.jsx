@@ -36,6 +36,14 @@ function fromDate8(s) {
   if (!s || s.length < 8) return "";
   return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 }
+function getTwoWeeksAgo() {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return d.toISOString().split("T")[0];
+}
+function getToday() {
+  return new Date().toISOString().split("T")[0];
+}
 
 /* ═══════════════════════ 메인 페이지 ═══════════════════════ */
 function DailyScrumboardPage() {
@@ -58,9 +66,11 @@ function DailyScrumboardPage() {
   const [deptUsers, setDeptUsers] = useState([]); // 같은 부서 사용자 목록
 
   // 조회 조건
-  const [searchType1,   setSearchType1]   = useState("");
-  const [searchUserId,  setSearchUserId]  = useState("");
-  const [searchOverdue, setSearchOverdue] = useState(false);
+  const [searchType1,        setSearchType1]        = useState("");
+  const [searchUserId,       setSearchUserId]        = useState("");
+  const [searchOverdue,      setSearchOverdue]       = useState(false);
+  const [searchCompleteFrom, setSearchCompleteFrom]  = useState(getTwoWeeksAgo);
+  const [searchCompleteTo,   setSearchCompleteTo]    = useState(getToday);
 
   // 모바일 컬럼 탭
   const [activeMobileCol, setActiveMobileCol] = useState("TODO");
@@ -134,10 +144,25 @@ function DailyScrumboardPage() {
 
   /** TASK_BOARD 조회 (로그인 사용자 부서 필터) */
   async function fetchTasks() {
-    let q = supabase.from("TASK_BOARD").select("*").order("BOARD_ID", { ascending: false });
-    if (user?.deptCd) q = q.eq("DEPT_CD", user.deptCd);
-    const { data } = await q;
-    if (!data) return;
+    const dept = user?.deptCd;
+
+    // 비완료 업무: 모두 조회
+    let q1 = supabase.from("TASK_BOARD").select("*")
+      .neq("STATUS", "COMPLETE")
+      .order("BOARD_ID", { ascending: false });
+    if (dept) q1 = q1.eq("DEPT_CD", dept);
+
+    // 완료 업무: 완료일자 범위로 조회
+    let q2 = supabase.from("TASK_BOARD").select("*")
+      .eq("STATUS", "COMPLETE")
+      .order("BOARD_ID", { ascending: false });
+    if (dept) q2 = q2.eq("DEPT_CD", dept);
+    if (searchCompleteFrom) q2 = q2.gte("COMPLETE_DATE", searchCompleteFrom.replace(/-/g, ""));
+    if (searchCompleteTo)   q2 = q2.lte("COMPLETE_DATE", searchCompleteTo.replace(/-/g, ""));
+
+    const [{ data: d1 }, { data: d2 }] = await Promise.all([q1, q2]);
+    const data = [...(d1 || []), ...(d2 || [])];
+    if (!data.length && !d1 && !d2) return;
 
     // 협업 동료 bulk 로드
     const boardIds = data.map((t) => t.BOARD_ID);
@@ -290,21 +315,42 @@ function DailyScrumboardPage() {
     closeDetail(); fetchTasks();
   }
 
+  /* ── 삭제 ── */
+  async function handleDelete() {
+    if (!detailTask?.id) return;
+    if (!window.confirm("이 업무를 삭제하시겠습니까?\n삭제 후 복구가 불가능합니다.")) return;
+    const boardId = detailTask.id;
+    // 협업 동료 먼저 삭제
+    await supabase.from("TASK_BOARD_COWORKER").delete().eq("BOARD_ID", boardId);
+    // 업무 삭제
+    const { error } = await supabase.from("TASK_BOARD").delete().eq("BOARD_ID", boardId);
+    if (error) { console.error("삭제 오류:", error.message); return; }
+    closeDetail();
+    fetchTasks();
+  }
+
   function closeDetail()  { setDetailTask(null); setEditForm(null); setIsEditing(false); }
   function cancelEdit()   { setEditForm({ ...detailTask }); setIsEditing(false); }
 
   /* ── 업무구분 신규 등록 ── */
   async function handleAddTaskMaster(level, name, extra = {}) {
-    // TASK_ID 자동 채번: 현재 최대값 + 1
-    const { data: maxData, error: maxError } = await supabase
+    // TASK_ID 채번: 등록일자(YYYYMMDD) + 당일 순번 (예: 202603171, 202603172...)
+    const today8 = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // "20260317"
+    const { data: allIds, error: maxError } = await supabase
       .from("TASK_MASTER")
       .select("TASK_ID")
-      .order("TASK_ID", { ascending: false })
-      .limit(1);
+      .order("TASK_ID", { ascending: false });
 
     if (maxError) return { success: false, message: maxError.message };
 
-    const nextId = maxData && maxData.length > 0 ? maxData[0].TASK_ID + 1 : 1;
+    const todayIds = (allIds || []).filter(r => String(r.TASK_ID).startsWith(today8));
+    let nextId;
+    if (todayIds.length > 0) {
+      const maxSeq = parseInt(String(todayIds[0].TASK_ID).slice(8));
+      nextId = parseInt(today8 + (maxSeq + 1).toString());
+    } else {
+      nextId = parseInt(today8 + "1");
+    }
 
     const insertData = {
       TASK_ID:  nextId,
@@ -465,7 +511,12 @@ function DailyScrumboardPage() {
             <span style={{ ...s.searchLabel, color: searchOverdue ? "#DC2626" : "#5A5A5A" }}>{t("daily.overdue")}</span>
           </label>
         </div>
-        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => { setSearchType1(""); setSearchUserId(""); setSearchOverdue(false); }}>{t("common.reset")}</button>
+        <button style={isMobile ? s.searchBtnFull : s.searchBtn} onClick={() => fetchTasks()}>조회</button>
+        <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => {
+          setSearchType1(""); setSearchUserId(""); setSearchOverdue(false);
+          setSearchCompleteFrom(getTwoWeeksAgo()); setSearchCompleteTo(getToday());
+          setTimeout(() => fetchTasks(), 0);
+        }}>{t("common.reset")}</button>
       </div>
 
       {/* ── 칸반 보드 ── */}
@@ -494,6 +545,16 @@ function DailyScrumboardPage() {
               );
             })}
           </div>
+          {/* 완료 탭 선택 시 날짜 조회 */}
+          {activeMobileCol === "COMPLETE" && (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", padding: "8px 12px", backgroundColor: "#F0FDF4", border: "1px solid #E2E8F0", borderTop: "none" }}>
+              <span style={{ fontSize: "11px", fontWeight: "600", color: "#16A34A", flexShrink: 0 }}>완료일자</span>
+              <input type="date" style={s.searchDateInput} value={searchCompleteFrom} onChange={(e) => setSearchCompleteFrom(e.target.value)} />
+              <span style={{ fontSize: "10px", color: "#94A3B8" }}>~</span>
+              <input type="date" style={s.searchDateInput} value={searchCompleteTo} onChange={(e) => setSearchCompleteTo(e.target.value)} />
+              <button style={{ ...s.colSearchBtn, padding: "4px 10px", fontSize: "11px" }} onClick={() => fetchTasks()}>조회</button>
+            </div>
+          )}
           {/* 선택된 컬럼 카드 목록 */}
           {COLUMNS.filter((col) => col.id === activeMobileCol).map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.id);
@@ -526,9 +587,21 @@ function DailyScrumboardPage() {
               const isOver   = dragOverCol === col.id;
               return (
                 <div key={col.id} style={s.column}>
-                  <div style={{ ...s.colHeader, backgroundColor: col.light }}>
-                    <span style={{ ...s.colLabel, color: col.color, borderColor: col.color }}>{col.label}</span>
-                    <span style={{ ...s.colCount, backgroundColor: col.color }}>{colTasks.length}</span>
+                  <div style={{
+                    ...s.colHeader,
+                    backgroundColor: col.light,
+                    ...(col.id === "COMPLETE" ? { justifyContent: "flex-start", gap: "3px", padding: "8px 10px" } : {}),
+                  }}>
+                    <span style={{ ...s.colLabel, color: col.color, borderColor: col.color, flexShrink: 0 }}>{col.label}</span>
+                    {col.id === "COMPLETE" && (
+                      <>
+                        <input type="date" style={s.colDateInput} value={searchCompleteFrom} onChange={(e) => setSearchCompleteFrom(e.target.value)} />
+                        <span style={{ fontSize: "9px", color: "#94A3B8", flexShrink: 0 }}>~</span>
+                        <input type="date" style={s.colDateInput} value={searchCompleteTo} onChange={(e) => setSearchCompleteTo(e.target.value)} />
+                        <button style={s.colSearchBtn} onClick={() => fetchTasks()}>조회</button>
+                      </>
+                    )}
+                    <span style={{ ...s.colCount, backgroundColor: col.color, marginLeft: "auto", flexShrink: 0 }}>{colTasks.length}</span>
                   </div>
                   <div
                     style={{ ...s.cardList, ...(isOver ? s.cardListOver : {}) }}
@@ -589,6 +662,7 @@ function DailyScrumboardPage() {
           onResolveIssue={handleResolveIssue}
           onAddTaskMaster={handleAddTaskMaster}
           onDeleteTaskMaster={handleDeleteTaskMaster}
+          onDelete={!isEditing ? handleDelete : null}
           deptUsers={deptUsers} />
       )}
 
@@ -661,9 +735,17 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
     const coworkersStr = selUsers.map(u => u.NAME).join(", ");
     try {
       if (mode === "new") {
-        const { data: mx } = await supabase.from("TASK_MASTER")
-          .select("TASK_ID").order("TASK_ID", { ascending: false }).limit(1);
-        const nextId = mx && mx.length > 0 ? mx[0].TASK_ID + 1 : 1;
+        // TASK_ID 채번: 등록일자(YYYYMMDD) + 당일 순번 (예: 202603171, 202603172...)
+        const today8 = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+        const { data: allIds } = await supabase.from("TASK_MASTER").select("TASK_ID").order("TASK_ID", { ascending: false });
+        const todayIds = (allIds || []).filter(r => String(r.TASK_ID).startsWith(today8));
+        let nextId;
+        if (todayIds.length > 0) {
+          const maxSeq = parseInt(String(todayIds[0].TASK_ID).slice(8));
+          nextId = parseInt(today8 + (maxSeq + 1).toString());
+        } else {
+          nextId = parseInt(today8 + "1");
+        }
         const { error } = await supabase.from("TASK_MASTER").insert({
           TASK_ID:   nextId,
           TASK_NAME: form.TASK_NAME.trim(),
@@ -1042,7 +1124,7 @@ const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", C
 
 function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel,
-                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, deptUsers = [] }) {
+                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, deptUsers = [] }) {
   const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
@@ -1450,15 +1532,20 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
           {errors.submit && <p style={ms.err}>{errors.submit}</p>}
         </div>
         <div style={ms.footer}>
-          {/* 텍스트 복사 버튼 — 상세 보기(readOnly) 모드에서만 표시 */}
-          {readOnly && (
-            <button
-              style={textCopied ? ms.copyTextBtnDone : ms.copyTextBtn}
-              onClick={handleCopyText}
-            >
-              {textCopied ? t("common.copied") : t("common.copy")}
-            </button>
-          )}
+          {/* 왼쪽: 텍스트 복사 + 삭제 버튼 */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            {readOnly && (
+              <button
+                style={textCopied ? ms.copyTextBtnDone : ms.copyTextBtn}
+                onClick={handleCopyText}
+              >
+                {textCopied ? t("common.copied") : t("common.copy")}
+              </button>
+            )}
+            {readOnly && onDelete && (
+              <button style={ms.deleteBtn} onClick={onDelete}>🗑 삭제</button>
+            )}
+          </div>
           <div style={ms.footerRight}>
             <button style={ms.cancelBtn} onClick={onClose}>{resolvedCloseLabel}</button>
             <button style={ms.submitBtn} onClick={onSubmit} disabled={submitDisabled}>{submitLabel}</button>
@@ -1519,6 +1606,21 @@ const s = {
     backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9",
     borderRadius: "5px", padding: "9px 14px", cursor: "pointer", width: "100%",
   },
+  searchDateInput: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#2F2F2F",
+    border: "1px solid #D9D9D9", borderRadius: "5px",
+    padding: "5px 8px", outline: "none", cursor: "pointer",
+  },
+  searchBtn: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
+    color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none",
+    borderRadius: "5px", padding: "6px 14px", cursor: "pointer",
+  },
+  searchBtnFull: {
+    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
+    color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none",
+    borderRadius: "5px", padding: "9px 14px", cursor: "pointer", width: "100%",
+  },
   // 모바일 컬럼 탭
   mobileColTabs: {
     display: "flex", borderBottom: "1px solid #E2E8F0",
@@ -1555,6 +1657,8 @@ const s = {
   },
   colLabel: { fontSize: "12px", fontWeight: "700", letterSpacing: "0.08em", border: "1px solid", borderRadius: "4px", padding: "2px 8px" },
   colCount: { fontSize: "12px", fontWeight: "700", color: "#FFFFFF", borderRadius: "10px", padding: "1px 8px", minWidth: "20px", textAlign: "center" },
+  colDateInput: { fontFamily: "'Pretendard', sans-serif", fontSize: "9.5px", color: "#2F2F2F", border: "1px solid #D9D9D9", borderRadius: "4px", padding: "2px 2px", outline: "none", cursor: "pointer", width: "54px", flexShrink: 0 },
+  colSearchBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "9.5px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#16A34A", border: "none", borderRadius: "4px", padding: "2px 5px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 },
   cardList: {
     flex: 1, backgroundColor: "#F8FAFC", borderRadius: "0 0 8px 8px",
     border: "1px solid #E2E8F0", borderTop: "none",
@@ -1639,6 +1743,7 @@ const ms = {
   err: { fontSize: "12px", color: "#DC2626", margin: "2px 0 0" },
   cancelBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 20px", cursor: "pointer" },
   submitBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none", borderRadius: "5px", padding: "8px 20px", cursor: "pointer" },
+  deleteBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#FFFFFF", backgroundColor: "#DC2626", border: "none", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
   // 이슈해결여부 (모달)
   issueStatusRow:     { display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", padding: "8px 12px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" },
   issueStatusLabel:   { fontSize: "12px", fontWeight: "500", color: "#64748B", flexShrink: 0 },

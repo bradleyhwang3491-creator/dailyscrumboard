@@ -18,31 +18,31 @@ const TODAY        = new Date();
 const TODAY_STR    = TODAY.toISOString().slice(0, 10);
 TODAY.setHours(0, 0, 0, 0);
 
-/* ── 월별: 바 위치 (left%, width%) ── */
+/* ── 월별: 바 위치 (left%, width%) — 완료예정일자 없으면 null ── */
 function getMonthBar(task, year, month) {
+  if (!task.plannedEnd) return null; // 완료예정일자 미등록 시 bar 없음
   const s = task.regDate    ? new Date(task.regDate)    : null;
-  const e = task.plannedEnd ? new Date(task.plannedEnd) : null;
-  if (!s && !e) return null;
+  const e = new Date(task.plannedEnd);
   const mS = new Date(year, month - 1, 1);
   const mE = new Date(year, month - 1, daysInMonth(year, month));
-  const bS = s || mS; const bE = e || mE;
-  if (bE < mS || bS > mE) return null;
+  const bS = s || mS;
+  if (e < mS || bS > mE) return null;
   const total = daysInMonth(year, month);
   const ds = bS < mS ? 1 : bS.getDate();
-  const de = bE > mE ? total : bE.getDate();
+  const de = e > mE ? total : e.getDate();
   return { left: `${((ds-1)/total)*100}%`, width: `${((de-ds+1)/total)*100}%` };
 }
 
-/* ── 주차별: 바 위치 ── */
+/* ── 주차별: 바 위치 — 완료예정일자 없으면 null ── */
 function getWeekBar(task, wStart, wEnd) {
+  if (!task.plannedEnd) return null; // 완료예정일자 미등록 시 bar 없음
   const s = task.regDate    ? new Date(task.regDate)    : null;
-  const e = task.plannedEnd ? new Date(task.plannedEnd) : null;
-  if (!s && !e) return null;
-  const bS = s || wStart; const bE = e || wEnd;
-  if (bE < wStart || bS > wEnd) return null;
+  const e = new Date(task.plannedEnd);
+  const bS = s || wStart;
+  if (e < wStart || bS > wEnd) return null;
   const total = (wEnd - wStart) / 86400000 + 1;
   const ds = bS < wStart ? 0 : Math.round((bS - wStart) / 86400000);
-  const de = bE > wEnd   ? total - 1 : Math.round((bE - wStart) / 86400000);
+  const de = e > wEnd   ? total - 1 : Math.round((e - wStart) / 86400000);
   return { left: `${(ds/total)*100}%`, width: `${((de-ds+1)/total)*100}%` };
 }
 
@@ -570,8 +570,10 @@ export default function GanttChartPage() {
                                   <span style={g.titleText}>{task.title}</span>
                                 </div>
                                 <div style={g.taskMeta}>
-                                  {task.regDate    && <span style={g.metaChip}>{task.regDate}</span>}
-                                  {task.plannedEnd && <span style={g.metaChip}>{task.plannedEnd}</span>}
+                                  {task.regDate && <span style={g.metaChip}>{task.regDate}</span>}
+                                  {task.plannedEnd
+                                    ? <span style={g.metaChip}>{task.plannedEnd}</span>
+                                    : <span style={g.metaChipNoDate}>완료예정일자 미등록</span>}
                                 </div>
                               </div>
                               {Array.from({ length: 12 }, (_, i) => {
@@ -691,8 +693,10 @@ export default function GanttChartPage() {
                                 <span style={g.titleText}>{task.title}</span>
                               </div>
                               <div style={g.taskMeta}>
-                                {task.regDate    && <span style={g.metaChip}>{task.regDate}</span>}
-                                {task.plannedEnd && <span style={g.metaChip}>{task.plannedEnd}</span>}
+                                {task.regDate && <span style={g.metaChip}>{task.regDate}</span>}
+                                {task.plannedEnd
+                                  ? <span style={g.metaChip}>{task.plannedEnd}</span>
+                                  : <span style={g.metaChipNoDate}>완료예정일자 미등록</span>}
                               </div>
                             </div>
                             {monthWeeks.map((mw) =>
@@ -796,7 +800,8 @@ const g = {
   statusDot:  { width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0 },
   titleText:  { fontSize: "12px", color: "#1E293B", fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: "underline", textDecorationColor: "#C4B5FD", textUnderlineOffset: "2px" },
   taskMeta:   { display: "flex", gap: "4px", marginTop: "3px", flexWrap: "wrap" },
-  metaChip:   { fontSize: "10px", color: "#94A3B8", backgroundColor: "#F8FAFC", borderRadius: "3px", padding: "1px 5px", border: "1px solid #E2E8F0" },
+  metaChip:        { fontSize: "10px", color: "#94A3B8", backgroundColor: "#F8FAFC", borderRadius: "3px", padding: "1px 5px", border: "1px solid #E2E8F0" },
+  metaChipNoDate:  { fontSize: "10px", color: "#DC2626", backgroundColor: "#FFF5F5", borderRadius: "3px", padding: "1px 5px", border: "1px solid #FCA5A5", whiteSpace: "nowrap" },
 
   /* 월/주 셀 & 바 */
   monthCell:  { position: "relative", borderRight: "1px solid #F3F4F6", boxSizing: "border-box", overflow: "visible", minHeight: "44px", cursor: "pointer" },

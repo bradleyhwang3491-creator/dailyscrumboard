@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useBreakpoint } from "../hooks/useBreakpoint";
@@ -17,12 +17,16 @@ const FALLBACK_MODELS = [
 
 /* ────────────────────── 헬퍼 ────────────────────── */
 function toDate8(iso) { return iso ? iso.replace(/-/g, "") : ""; }
+function fromDate8(s) {
+  if (!s || s.length < 8) return "";
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
 
 /** Gemini API 호출 (모델 폴백 포함) */
 async function callGemini(prompt) {
   const reqBody = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.65, maxOutputTokens: 2048 },
+    generationConfig: { temperature: 0.6, maxOutputTokens: 4096 },
   });
 
   let lastError = "";
@@ -53,13 +57,7 @@ async function callGemini(prompt) {
 function AIWeeklyReportPage() {
   const { user }  = useAuth();
   const isMobile  = useBreakpoint(768);
-  const { t } = useLanguage();
-  const STATUS_LABEL = {
-    TODO:     t("common.todo"),
-    PROGRESS: t("common.inProgress"),
-    HOLDING:  t("common.holding"),
-    COMPLETE: t("common.complete"),
-  };
+  const { t }     = useLanguage();
 
   const today   = new Date().toISOString().split("T")[0];
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -75,22 +73,26 @@ function AIWeeklyReportPage() {
   const [deptUsers, setDeptUsers] = useState([]);
   const [userMap,   setUserMap]   = useState({});
 
-  /* 결과 — 두 리포트 독립 저장 */
-  const [reports,    setReports]    = useState({ normal: "", formal: "" });
-  const [loadingMap, setLoadingMap] = useState({ normal: false, formal: false });
-  const [errorMsg,   setErrorMsg]   = useState("");
+  /* 결과 */
+  const [report,    setReport]    = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [errorMsg,  setErrorMsg]  = useState("");
+  const [copied,    setCopied]    = useState(false);
 
-  /* 활성 탭 */
-  const [activeTab,  setActiveTab]  = useState("normal"); // 'normal' | 'formal'
-  const [copiedTab,  setCopiedTab]  = useState("");
+  const resultRef = useRef(null);
 
   useEffect(() => { fetchMasterData(); }, []);
 
   async function fetchMasterData() {
+    // 업무구분1: 로그인 사용자 부서만 조회
+    let q1 = supabase.from("TASK_MASTER").select("TASK_ID, TASK_NAME").eq("LEVEL", "1").order("TASK_NAME");
+    if (user?.deptCd) q1 = q1.eq("DEPT_CD", user.deptCd);
+
     const [{ data: d1 }, { data: users }] = await Promise.all([
-      supabase.from("TASK_MASTER").select("TASK_ID, TASK_NAME").eq("LEVEL", "1").order("TASK_NAME"),
+      q1,
       supabase.from("SCRUMBOARD_USER").select("ID, NAME, DEPT_CD"),
     ]);
+
     if (d1) setTm1(d1);
     if (users) {
       const map = {};
@@ -101,109 +103,99 @@ function AIWeeklyReportPage() {
     }
   }
 
-  /* ── REPORT 동시 생성 ── */
+  /* ── 리포트 생성 ── */
   async function handleGenerate() {
     setErrorMsg("");
-    setReports({ normal: "", formal: "" });
+    setReport("");
 
     if (!fromDate || !toDate) { setErrorMsg("조회 기간을 선택해주세요."); return; }
     if (fromDate > toDate)    { setErrorMsg("시작일이 종료일보다 늦을 수 없습니다."); return; }
 
-    setLoadingMap({ normal: true, formal: true });
+    setLoading(true);
 
     try {
       /* 1. TASK_BOARD 조회 */
       let query = supabase
-        .from("TASK_BOARD").select("*")
+        .from("TASK_BOARD")
+        .select("BOARD_ID, TITLE, TASK_GUBUN1, TASK_CONTENT, ISSUE, COMPLETE_DATE, IMPORTANT_GUBUN, PAGE_URL, STATUS, ID, DEPT_CD")
         .gte("INSERT_DATE", toDate8(fromDate))
         .lte("INSERT_DATE", toDate8(toDate))
         .order("INSERT_DATE", { ascending: true });
 
-      if (taskType1Cd)  query = query.eq("TASK_GUBUN1", taskType1Cd);
-      if (searchUserId) query = query.eq("ID", searchUserId);
+      if (user?.deptCd)  query = query.eq("DEPT_CD", user.deptCd);
+      if (taskType1Cd)   query = query.eq("TASK_GUBUN1", taskType1Cd);
+      if (searchUserId)  query = query.eq("ID", searchUserId);
 
       const { data: tasks, error: dbError } = await query;
 
-      if (dbError) { setErrorMsg("데이터 조회 오류: " + dbError.message); return; }
+      if (dbError) { setErrorMsg("데이터 조회 오류: " + dbError.message); setLoading(false); return; }
       if (!tasks || tasks.length === 0) {
         setErrorMsg("조회 조건에 해당하는 업무 데이터가 없습니다. 기간 또는 조건을 변경해 주세요.");
+        setLoading(false);
         return;
       }
 
-      /* 2. 데이터 텍스트 변환 */
+      /* 2. TASK_MASTER 코드 → 명칭 맵 */
+      const tm1Map = {};
+      tm1.forEach((r) => { tm1Map[r.TASK_ID] = r.TASK_NAME; });
+
+      /* 3. 데이터 텍스트 구성 */
       const period   = `${fromDate} ~ ${toDate}`;
-      const dataText = tasks.map((t, i) => {
-        const parts = [
+      const dataText = tasks.map((task, i) => {
+        const gubunName  = tm1Map[task.TASK_GUBUN1] ?? task.TASK_GUBUN1 ?? "미분류";
+        const completedt = fromDate8(task.COMPLETE_DATE) || "미완료";
+        const importance = task.IMPORTANT_GUBUN ?? "하";
+        const lines = [
           `[업무 ${i + 1}]`,
-          `제목: ${t.TITLE ?? ""}`,
-          `상태: ${STATUS_LABEL[t.STATUS] ?? t.STATUS ?? ""}`,
-          `중요도: ${t.IMPORTANT_GUBUN ?? "하"}`,
-          `등록자: ${userMap[t.ID] ?? t.ID ?? ""}`,
-          `등록일: ${t.INSERT_DATE ?? ""}`,
-          t.DUE_EXPECT_DATE        ? `완료예정일: ${t.DUE_EXPECT_DATE}` : null,
-          t.COMPLETE_DATE          ? `실제완료일: ${t.COMPLETE_DATE}`   : null,
-          t.TASK_CONTENT?.trim()   ? `작업내용: ${t.TASK_CONTENT}`      : null,
-          t.LEADER_KNOW?.trim()    ? `팀장공유: ${t.LEADER_KNOW}`       : null,
-          t.ISSUE?.trim()
-            ? `이슈: ${t.ISSUE} (해결여부: ${t.ISSUE_COMPLETE_YN === "Y" ? "해결" : "미해결"})`
-            : null,
+          `1. 제목: ${task.TITLE ?? ""}`,
+          `2. 업무구분: ${gubunName}`,
+          `3. 작업내용: ${task.TASK_CONTENT?.trim() || "없음"}`,
+          `4. 이슈사항: ${task.ISSUE?.trim() || "없음"}`,
+          `5. 완료일자: ${completedt}`,
+          `6. 중요도: ${importance}`,
+          `7. 참고링크: ${task.PAGE_URL?.trim() || "없음"}`,
         ];
-        return parts.filter(Boolean).join("\n");
+        return lines.join("\n");
       }).join("\n\n");
 
-      /* 3. 두 프롬프트 구성 */
-      const promptNormal = `다음은 ${period} 기간의 업무 데이터(총 ${tasks.length}건)입니다.\n\n${dataText}\n\n위 데이터를 분석하여 아래 형식으로 보기 좋은 업무 리포트를 한국어로 작성해주세요. 각 섹션은 빈 줄로 구분해주세요.\n\n1. 📊 업무 현황 요약\n   - 전체 업무 수 및 상태별 현황 (TO-DO / 진행 중 / 보류 / 완료)\n   - 중요도별 현황 (일반 / 긴급 / 초긴급)\n\n2. 📝 주요 업무 내용 요약\n   - 각 업무의 핵심 내용을 간결하게 정리\n\n3. 🚨 이슈사항 요약\n   - 이슈가 등록된 업무 목록과 내용 정리\n   - 미해결 이슈와 해결된 이슈를 구분하여 표시\n\n4. ✅ 완료 업무 정리\n   - 완료 처리된 업무 목록을 정리`;
+      /* 4. 프롬프트 구성 */
+      const prompt = `다음은 ${period} 기간 동안의 업무 데이터(총 ${tasks.length}건)입니다.\n\n${dataText}\n\n위 데이터를 바탕으로 아래 두 파트로 구성된 주간업무보고서를 한국어로 작성해주세요. 두 파트를 구분선(━━━━)으로 구분하고, 하나의 문서로 이어서 작성해주세요.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【 PART 1. 업무별 내러티브 요약 】\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n각 업무를 자연스러운 한국어 문장(3~5문장)으로 서술해주세요.\n업무의 목적, 진행 내용, 이슈 및 완료 여부를 포함하세요.\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【 PART 2. 주간업무보고서 (표준 형식) 】\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n각 업무를 아래 형식으로 정리해주세요:\n\n──────────────────────────\n1. 제목:\n2. 업무구분:\n3. 작업내용:\n4. 이슈사항:\n5. 완료일자:\n6. 중요도:\n7. 참고링크:\n──────────────────────────\n\n모든 업무를 빠짐없이 포함하고, 전문적이고 간결하게 작성해주세요.`;
 
-      const promptFormal = `다음은 ${period} 기간의 업무 데이터(총 ${tasks.length}건)입니다.\n\n${dataText}\n\n위 데이터를 바탕으로 팀장님께 보고하는 주간업무보고서를 한국어로 작성해주세요. 아래 형식을 따르되, 전문적이고 간결하며 보고에 적합한 어투로 작성해주세요.\n\n■ 주간업무보고서\n보고기간: ${period}\n\n1. 이번 주 완료 업무\n2. 현재 진행 중인 업무\n3. 보류/지연 업무 및 사유\n4. 이슈 및 리스크 사항\n5. 다음 주 예정 업무\n6. 건의/협조 요청 사항`;
+      /* 5. Gemini 호출 */
+      const result = await callGemini(prompt);
 
-      /* 4. 두 API 동시 호출 */
-      const [resNormal, resFormal] = await Promise.allSettled([
-        callGemini(promptNormal),
-        callGemini(promptFormal),
-      ]);
-
-      const normalText = resNormal.status === "fulfilled" && resNormal.value.ok
-        ? resNormal.value.text : "";
-      const formalText = resFormal.status === "fulfilled" && resFormal.value.ok
-        ? resFormal.value.text : "";
-
-      if (!normalText && !formalText) {
-        const err = resNormal.status === "fulfilled"
-          ? resNormal.value.error
-          : resNormal.reason?.message ?? "알 수 없는 오류";
-        setErrorMsg("Gemini API 오류: " + err);
+      if (!result.ok) {
+        setErrorMsg("Gemini API 오류: " + result.error);
         return;
       }
 
-      setReports({ normal: normalText, formal: formalText });
+      setReport(result.text);
+      // 결과로 스크롤
+      setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
 
     } catch (e) {
       setErrorMsg("오류가 발생했습니다: " + e.message);
     } finally {
-      setLoadingMap({ normal: false, formal: false });
+      setLoading(false);
     }
   }
 
-  const isLoading = loadingMap.normal || loadingMap.formal;
-  const hasResult = reports.normal || reports.formal;
-
   /* ── 복사 ── */
-  async function handleCopy(type) {
-    const text = reports[type];
-    if (!text) return;
+  async function handleCopy() {
+    if (!report) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(report);
     } catch {
       const ta = document.createElement("textarea");
-      ta.value = text;
+      ta.value = report;
       ta.style.cssText = "position:fixed;opacity:0";
       document.body.appendChild(ta);
       ta.focus(); ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
     }
-    setCopiedTab(type);
-    setTimeout(() => setCopiedTab(""), 2200);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2200);
   }
 
   /* ── render ── */
@@ -229,13 +221,13 @@ function AIWeeklyReportPage() {
             </div>
           </div>
 
-          {/* 업무구분 */}
+          {/* 업무구분 (부서 필터 적용됨) */}
           <div style={isMobile ? s.filterFieldFull : s.filterField}>
             <label style={s.filterLabel}>{t("aiReport.task")}</label>
             <select style={isMobile ? s.filterSelectFull : s.filterSelect} value={taskType1Cd}
               onChange={(e) => setTaskType1Cd(e.target.value)}>
               <option value="">{t("common.all")}</option>
-              {tm1.map((t) => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
+              {tm1.map((item) => <option key={item.TASK_ID} value={item.TASK_ID}>{item.TASK_NAME}</option>)}
             </select>
           </div>
 
@@ -251,9 +243,9 @@ function AIWeeklyReportPage() {
 
           {/* 생성 버튼 */}
           <div style={isMobile ? s.btnFieldFull : s.btnField}>
-            <button style={isLoading ? s.genBtnDisabled : s.genBtn}
-              onClick={handleGenerate} disabled={isLoading}>
-              {isLoading ? t("aiReport.generatingBtn") : t("aiReport.generateBtn")}
+            <button style={loading ? s.genBtnDisabled : s.genBtn}
+              onClick={handleGenerate} disabled={loading}>
+              {loading ? "⏳ 생성 중..." : "✨ Report 생성"}
             </button>
           </div>
         </div>
@@ -263,7 +255,7 @@ function AIWeeklyReportPage() {
       {errorMsg && <div style={s.errorBox}>⚠️ {errorMsg}</div>}
 
       {/* 로딩 */}
-      {isLoading && (
+      {loading && (
         <div style={s.loadingBox}>
           <div style={s.dotRow}>
             <span style={{ ...s.dot, animationDelay: "0s" }} />
@@ -271,58 +263,51 @@ function AIWeeklyReportPage() {
             <span style={{ ...s.dot, animationDelay: "0.4s" }} />
           </div>
           <p style={s.loadingText}>
-            {isMobile ? t("aiReport.loadingMobile") : t("aiReport.loadingDesktop")}
+            업무 데이터를 분석하여 주간보고서를 생성하고 있습니다...
           </p>
         </div>
       )}
 
-      {/* ── 결과 탭 ── */}
-      {hasResult && !isLoading && (
-        <div style={s.resultCard}>
-          {/* 탭 헤더 */}
-          <div style={isMobile ? s.tabBarMobile : s.tabBar}>
-            <div style={s.tabs}>
-              <button
-                style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "normal" ? s.tabActive : s.tabInactive) }}
-                onClick={() => setActiveTab("normal")}
-              >
-                {isMobile ? t("aiReport.tab1Mobile") : t("aiReport.tab1Desktop")}
-                {reports.normal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "normal" ? "#3A3A3A" : "#94A3B8" }} />}
-              </button>
-              <button
-                style={{ ...s.tab, ...(isMobile ? s.tabMobile : {}), ...(activeTab === "formal" ? s.tabActive : s.tabInactive) }}
-                onClick={() => setActiveTab("formal")}
-              >
-                {isMobile ? t("aiReport.tab2Mobile") : t("aiReport.tab2Desktop")}
-                {reports.formal && <span style={{ ...s.tabDot, backgroundColor: activeTab === "formal" ? "#3A3A3A" : "#94A3B8" }} />}
-              </button>
+      {/* ── 결과 영역 ── */}
+      {report && !loading && (
+        <div ref={resultRef} style={s.resultCard}>
+          {/* 결과 헤더 */}
+          <div style={s.resultHeader}>
+            <div style={s.resultTitleWrap}>
+              <span style={s.resultTitle}>📋 주간업무보고서</span>
+              <span style={s.resultPeriod}>{fromDate} ~ {toDate}</span>
             </div>
             <button
-              style={copiedTab === activeTab ? s.copiedBtn : s.copyBtn}
-              onClick={() => handleCopy(activeTab)}
-              disabled={!reports[activeTab]}
+              style={copied ? s.copiedBtn : s.copyBtn}
+              onClick={handleCopy}
             >
-              {copiedTab === activeTab ? t("aiReport.copiedBtn") : t("aiReport.copyBtn")}
+              {copied ? "✓ 복사완료" : "📋 텍스트 복사"}
             </button>
           </div>
 
-          {/* 탭 콘텐츠 */}
+          {/* 보고서 본문 */}
           <div style={isMobile ? s.resultBodyMobile : s.resultBody}>
-            {reports[activeTab]
-              ? reports[activeTab].split("\n").map((line, i) => {
-                  const t = line.trim();
-                  if (t === "")                         return <div key={i} style={s.emptyLine} />;
-                  if (t.startsWith("# "))               return <p key={i} style={s.h1}>{t.slice(2)}</p>;
-                  if (t.startsWith("## "))              return <p key={i} style={s.h2}>{t.slice(3)}</p>;
-                  if (t.startsWith("### "))             return <p key={i} style={s.h3}>{t.slice(4)}</p>;
-                  if (t.startsWith("■"))                return <p key={i} style={s.sectionHead}>{t}</p>;
-                  if (/^\d+\./.test(t))                 return <p key={i} style={s.numbered}>{renderBold(t)}</p>;
-                  if (t.startsWith("- ") || t.startsWith("• "))
-                    return <p key={i} style={s.bullet}>{renderBold(t.slice(2))}</p>;
-                  return <p key={i} style={s.bodyLine}>{renderBold(t)}</p>;
-                })
-              : <p style={s.emptyTabMsg}>{t("aiReport.noReport")}</p>
-            }
+            {report.split("\n").map((line, i) => {
+              const trimmed = line.trim();
+              if (trimmed === "") return <div key={i} style={s.emptyLine} />;
+              if (trimmed.startsWith("━")) return <hr key={i} style={s.divider} />;
+              if (trimmed.startsWith("【") && trimmed.endsWith("】"))
+                return <p key={i} style={s.partHead}>{trimmed}</p>;
+              if (trimmed.startsWith("──"))
+                return <hr key={i} style={s.subDivider} />;
+              if (/^\[업무\s*\d+\]/.test(trimmed))
+                return <p key={i} style={s.taskNo}>{trimmed}</p>;
+              if (/^[1-7]\.\s/.test(trimmed))
+                return <p key={i} style={s.fieldLine}>{renderBold(trimmed)}</p>;
+              if (/^\d+\./.test(trimmed))
+                return <p key={i} style={s.numbered}>{renderBold(trimmed)}</p>;
+              if (trimmed.startsWith("- ") || trimmed.startsWith("• "))
+                return <p key={i} style={s.bullet}>{renderBold(trimmed.slice(2))}</p>;
+              if (trimmed.startsWith("# "))   return <p key={i} style={s.h1}>{trimmed.slice(2)}</p>;
+              if (trimmed.startsWith("## "))  return <p key={i} style={s.h2}>{trimmed.slice(3)}</p>;
+              if (trimmed.startsWith("### ")) return <p key={i} style={s.h3}>{trimmed.slice(4)}</p>;
+              return <p key={i} style={s.bodyLine}>{renderBold(trimmed)}</p>;
+            })}
           </div>
         </div>
       )}
@@ -356,17 +341,12 @@ const s = {
     backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", borderRadius: "10px",
     padding: "16px 20px", marginBottom: "16px",
   },
-  filterRow: {
-    display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end",
-  },
-  // 모바일: 세로 스택
-  filterRowMobile: {
-    display: "flex", flexDirection: "column", gap: "12px",
-  },
+  filterRow:       { display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "flex-end" },
+  filterRowMobile: { display: "flex", flexDirection: "column", gap: "12px" },
   filterField:     { display: "flex", flexDirection: "column", gap: "6px" },
   filterFieldFull: { display: "flex", flexDirection: "column", gap: "6px", width: "100%" },
-  filterLabel: { fontSize: "12px", fontWeight: "500", color: "#64748B" },
-  dateRange:   { display: "flex", alignItems: "center", gap: "8px" },
+  filterLabel:     { fontSize: "12px", fontWeight: "500", color: "#64748B" },
+  dateRange:       { display: "flex", alignItems: "center", gap: "8px" },
   dateInput: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B",
     border: "1px solid #D9D9D9", borderRadius: "5px", padding: "7px 10px", outline: "none",
@@ -376,7 +356,7 @@ const s = {
     border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 10px", outline: "none",
     flex: 1, minWidth: 0,
   },
-  rangeSep:    { fontSize: "13px", color: "#94A3B8", fontWeight: "600", flexShrink: 0 },
+  rangeSep: { fontSize: "13px", color: "#94A3B8", fontWeight: "600", flexShrink: 0 },
   filterSelect: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#2F2F2F",
     border: "1px solid #D9D9D9", borderRadius: "5px",
@@ -388,7 +368,7 @@ const s = {
     padding: "8px 10px", outline: "none", width: "100%", cursor: "pointer",
   },
 
-  /* 생성 버튼 필드 */
+  /* 생성 버튼 */
   btnField:     { display: "flex", flexDirection: "column", justifyContent: "flex-end" },
   btnFieldFull: { display: "flex", flexDirection: "column", width: "100%" },
   genBtn: {
@@ -427,63 +407,40 @@ const s = {
     backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8",
     borderRadius: "10px", overflow: "hidden",
   },
-
-  /* 탭 바 */
-  tabBar: {
+  resultHeader: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    borderBottom: "1px solid #E8E8E8", backgroundColor: "#F8FAFC",
-    padding: "0 20px",
+    padding: "14px 20px", borderBottom: "1px solid #E8E8E8",
+    backgroundColor: "#F8FAFC", flexWrap: "wrap", gap: "8px",
   },
-  tabBarMobile: {
-    display: "flex", alignItems: "center", justifyContent: "space-between",
-    borderBottom: "1px solid #E8E8E8", backgroundColor: "#F8FAFC",
-    padding: "0 12px",
-  },
-  tabs: { display: "flex" },
-  tab: {
-    fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
-    border: "none", backgroundColor: "transparent", cursor: "pointer",
-    padding: "14px 18px", display: "flex", alignItems: "center", gap: "6px",
-    borderBottom: "2px solid transparent", marginBottom: "-1px",
-  },
-  tabMobile: {
-    fontSize: "12px", padding: "12px 10px",
-  },
-  tabActive: {
-    color: "#1E293B", fontWeight: "700",
-    borderBottomColor: "#3A3A3A",
-  },
-  tabInactive: {
-    color: "#94A3B8",
-    borderBottomColor: "transparent",
-  },
-  tabDot: {
-    display: "inline-block", width: "6px", height: "6px",
-    borderRadius: "50%",
-  },
+  resultTitleWrap: { display: "flex", alignItems: "center", gap: "10px" },
+  resultTitle:     { fontSize: "14px", fontWeight: "700", color: "#1E293B" },
+  resultPeriod:    { fontSize: "12px", color: "#64748B", backgroundColor: "#E2E8F0", borderRadius: "4px", padding: "2px 8px" },
   copyBtn: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500",
     color: "#3A3A3A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9",
-    borderRadius: "5px", padding: "6px 14px", cursor: "pointer",
+    borderRadius: "5px", padding: "6px 14px", cursor: "pointer", whiteSpace: "nowrap",
   },
   copiedBtn: {
     fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600",
     color: "#16A34A", backgroundColor: "#F0FDF4", border: "1px solid #86EFAC",
-    borderRadius: "5px", padding: "6px 14px", cursor: "pointer",
+    borderRadius: "5px", padding: "6px 14px", cursor: "pointer", whiteSpace: "nowrap",
   },
-  resultBody:       { padding: "20px 28px", maxHeight: "640px", overflowY: "auto" },
-  resultBodyMobile: { padding: "16px", maxHeight: "60vh", overflowY: "auto" },
-  emptyTabMsg:  { fontSize: "13px", color: "#CBD5E1", textAlign: "center", padding: "40px 0" },
+  resultBody:       { padding: "20px 28px", maxHeight: "680px", overflowY: "auto" },
+  resultBodyMobile: { padding: "16px", maxHeight: "62vh", overflowY: "auto" },
 
-  /* 리포트 텍스트 */
-  h1:         { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: "16px 0 6px" },
-  h2:         { fontSize: "15px", fontWeight: "700", color: "#1E293B", margin: "14px 0 4px" },
-  h3:         { fontSize: "14px", fontWeight: "600", color: "#334155", margin: "10px 0 4px" },
-  sectionHead:{ fontSize: "15px", fontWeight: "700", color: "#1E293B", margin: "14px 0 4px", borderBottom: "1px solid #E2E8F0", paddingBottom: "4px" },
-  numbered:   { fontSize: "14px", fontWeight: "600", color: "#1E293B", margin: "10px 0 4px" },
-  bullet:     { fontSize: "13px", color: "#334155", margin: "3px 0", paddingLeft: "12px", lineHeight: "1.65" },
-  bodyLine:   { fontSize: "13px", color: "#475569", margin: "3px 0", lineHeight: "1.65" },
-  emptyLine:  { height: "8px" },
+  /* 보고서 텍스트 */
+  partHead:  { fontSize: "15px", fontWeight: "800", color: "#1E293B", margin: "18px 0 8px", letterSpacing: "0.04em" },
+  taskNo:    { fontSize: "14px", fontWeight: "700", color: "#2563EB", margin: "14px 0 4px", padding: "4px 10px", backgroundColor: "#EFF6FF", borderRadius: "4px", display: "inline-block" },
+  fieldLine: { fontSize: "13px", color: "#1E293B", margin: "3px 0 3px 8px", lineHeight: "1.7" },
+  h1:        { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: "16px 0 6px" },
+  h2:        { fontSize: "15px", fontWeight: "700", color: "#1E293B", margin: "14px 0 4px" },
+  h3:        { fontSize: "14px", fontWeight: "600", color: "#334155", margin: "10px 0 4px" },
+  numbered:  { fontSize: "14px", fontWeight: "600", color: "#1E293B", margin: "10px 0 4px" },
+  bullet:    { fontSize: "13px", color: "#334155", margin: "3px 0", paddingLeft: "12px", lineHeight: "1.65" },
+  bodyLine:  { fontSize: "13px", color: "#475569", margin: "3px 0", lineHeight: "1.65" },
+  emptyLine: { height: "8px" },
+  divider:   { border: "none", borderTop: "2px solid #CBD5E1", margin: "16px 0" },
+  subDivider:{ border: "none", borderTop: "1px dashed #E2E8F0", margin: "10px 0" },
 };
 
 export default AIWeeklyReportPage;

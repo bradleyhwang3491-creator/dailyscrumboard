@@ -406,7 +406,7 @@ export default function CommunicationBoardPage() {
     if (sec.id === "received") {
       if (loadingReceived) return <LoadingState label={t("common.loading")} />;
       if (received.length === 0) return <EmptyState sec={sec} />;
-      return received.map(item => (
+      return received.slice(0, 5).map(item => (
         <ReceivedItem
           key={item.TASK_REQUEST_ID}
           item={item}
@@ -418,7 +418,7 @@ export default function CommunicationBoardPage() {
     if (sec.id === "sent") {
       if (loadingSent) return <LoadingState label={t("common.loading")} />;
       if (sent.length === 0) return <EmptyState sec={sec} />;
-      return sent.map(item => (
+      return sent.slice(0, 5).map(item => (
         <SentItem
           key={item.TASK_REQUEST_ID}
           item={item}
@@ -430,14 +430,14 @@ export default function CommunicationBoardPage() {
     if (sec.id === "manager") {
       if (loadingBoard) return <LoadingState label={t("common.loading")} />;
       if (managerItems.length === 0) return <EmptyState sec={sec} />;
-      return managerItems.map(t => (
+      return managerItems.slice(0, 5).map(t => (
         <ManagerItem key={t.id} task={t} userMap={userMap} onClick={() => setSelectedTask(t)} />
       ));
     }
     if (sec.id === "issue") {
       if (loadingBoard) return <LoadingState label={t("common.loading")} />;
       if (issueItems.length === 0) return <EmptyState sec={sec} />;
-      return issueItems.map(t => (
+      return issueItems.slice(0, 5).map(t => (
         <IssueItem key={t.id} task={t} userMap={userMap} onClick={() => setSelectedTask(t)} />
       ));
     }
