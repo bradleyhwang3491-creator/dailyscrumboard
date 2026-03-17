@@ -256,20 +256,33 @@ function DailyScrumboardPage() {
       PAGE_URL:        editForm.relatedLink,
     }).eq("BOARD_ID", editForm.id);
     if (!error) {
-      // 협업 동료 업데이트
-      const existingCoworkerIds = detailTask?.coworkerIds || [];
+      // 협업 동료 업데이트: DB에서 기존 데이터 조회 후 분기 처리
+      const boardId = editForm.id;
       const newCoworkerIds = editForm.coworkerIds || [];
 
-      if (existingCoworkerIds.length > 0) {
-        // 기존 데이터 있으면 먼저 삭제
-        await supabase.from("TASK_BOARD_COWORKER").delete().eq("BOARD_ID", editForm.id);
+      // 현재 DB에 존재하는 coworker 조회
+      const { data: existingCw } = await supabase
+        .from("TASK_BOARD_COWORKER")
+        .select("COWORKER_ID")
+        .eq("BOARD_ID", boardId);
+
+      const hasExisting = (existingCw || []).length > 0;
+
+      if (hasExisting) {
+        // 기존 데이터 있으면 먼저 전체 삭제
+        const { error: delErr } = await supabase
+          .from("TASK_BOARD_COWORKER")
+          .delete()
+          .eq("BOARD_ID", boardId);
+        if (delErr) console.error("협업동료 삭제 오류:", delErr.message);
       }
 
+      // 새로 선택된 동료가 있으면 INSERT
       if (newCoworkerIds.length > 0) {
-        // 최종 수정 데이터 insert
-        await supabase.from("TASK_BOARD_COWORKER").insert(
-          newCoworkerIds.map((id, idx) => ({ BOARD_ID: editForm.id, SEQ_NO: idx + 1, COWORKER_ID: id }))
-        );
+        const { error: insErr } = await supabase
+          .from("TASK_BOARD_COWORKER")
+          .insert(newCoworkerIds.map((id, idx) => ({ BOARD_ID: boardId, SEQ_NO: idx + 1, COWORKER_ID: id })));
+        if (insErr) console.error("협업동료 저장 오류:", insErr.message);
       }
     }
     setEditLoading(false);

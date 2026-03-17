@@ -94,6 +94,9 @@ function Icon({ name, size = 20, color = "currentColor" }) {
   return icons[name] ?? null;
 }
 
+/* ─────────────── 상태 텍스트 (모듈 레벨) ─────────────── */
+const STATUS_TEXT_MAP = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", COMPLETE: "COMPLETE" };
+
 /* ─────────────── 빈 상태 ─────────────── */
 function EmptyState({ sec }) {
   return (
@@ -259,6 +262,12 @@ export default function CommunicationBoardPage() {
   const [selectedTask,        setSelectedTask]        = useState(null);
   const [showEditSentModal,   setShowEditSentModal]   = useState(false);
   const [editSentTarget,      setEditSentTarget]      = useState(null);
+  const [showReceivedAll,     setShowReceivedAll]     = useState(false);
+  const [showSentAll,         setShowSentAll]         = useState(false);
+
+  /* 답변팝업 내에서 다시 열기용 */
+  const [replyFromAll,        setReplyFromAll]        = useState(false);
+  const [editFromAll,         setEditFromAll]         = useState(false);
 
   /* 데이터 상태 */
   const [received,        setReceived]        = useState([]);
@@ -266,6 +275,7 @@ export default function CommunicationBoardPage() {
   const [managerItems,    setManagerItems]    = useState([]);
   const [issueItems,      setIssueItems]      = useState([]);
   const [userMap,         setUserMap]         = useState({});
+  const [deptUsers,       setDeptUsers]       = useState([]);
   const [tm1, setTm1]   = useState([]);
   const [tm2, setTm2]   = useState([]);
   const [tm3, setTm3]   = useState([]);
@@ -277,10 +287,14 @@ export default function CommunicationBoardPage() {
   /* 전체 유저 맵 로드 */
   useEffect(() => {
     async function loadUserMap() {
-      const { data } = await supabase.from("SCRUMBOARD_USER").select("ID,NAME");
+      const { data } = await supabase.from("SCRUMBOARD_USER").select("ID,NAME,DEPT_CD");
       const map = {};
       (data ?? []).forEach(u => { map[u.ID] = u.NAME; });
       setUserMap(map);
+      // 같은 부서 사용자
+      const dept = user?.deptCd;
+      if (dept) setDeptUsers((data ?? []).filter(u => u.DEPT_CD === dept));
+      else setDeptUsers(data ?? []);
     }
     if (user) loadUserMap();
   }, [user]);
@@ -337,8 +351,23 @@ export default function CommunicationBoardPage() {
 
     if (bd) {
       const mapped = bd.map(mapTaskBoardRow);
-      setManagerItems(mapped.filter(t => t.teamNote?.trim()));
-      setIssueItems(mapped.filter(t => t.issue?.trim()));
+      // 협업 동료 bulk 로드
+      const boardIds = bd.map(r => r.BOARD_ID);
+      let cwMap = {};
+      if (boardIds.length > 0) {
+        const { data: cwData } = await supabase
+          .from("TASK_BOARD_COWORKER")
+          .select("BOARD_ID, COWORKER_ID, SEQ_NO")
+          .in("BOARD_ID", boardIds)
+          .order("SEQ_NO");
+        (cwData || []).forEach(r => {
+          if (!cwMap[r.BOARD_ID]) cwMap[r.BOARD_ID] = [];
+          cwMap[r.BOARD_ID].push(r.COWORKER_ID);
+        });
+      }
+      const enriched = mapped.map(t => ({ ...t, coworkerIds: cwMap[t.id] || [] }));
+      setManagerItems(enriched.filter(t => t.teamNote?.trim()));
+      setIssueItems(enriched.filter(t => t.issue?.trim()));
     }
     const mapTm = rows => (rows ?? []).map(r => ({
       TASK_ID:   r.TASK_ID,
@@ -417,18 +446,24 @@ export default function CommunicationBoardPage() {
   function renderFooter(sec) {
     if (sec.id === "received") {
       return (
-        <span style={s.footerStatus}>
-          <span style={{ ...s.statusDot, backgroundColor: "#3B82F6" }} />
-          총 {received.length}건 · 미답변 {received.filter(r => !r.REPLY_CONTEXT).length}건
-        </span>
+        <>
+          <span style={s.footerStatus}>
+            <span style={{ ...s.statusDot, backgroundColor: "#3B82F6" }} />
+            총 {received.length}건 · 미답변 {received.filter(r => !r.REPLY_CONTEXT).length}건
+          </span>
+          <button style={s.moreBtn} onClick={() => setShowReceivedAll(true)}>더보기 ›</button>
+        </>
       );
     }
     if (sec.id === "sent") {
       return (
-        <span style={s.footerStatus}>
-          <span style={{ ...s.statusDot, backgroundColor: "#10B981" }} />
-          총 {sent.length}건 · 답변대기 {sent.filter(r => !r.REPLY_CONTEXT).length}건
-        </span>
+        <>
+          <span style={s.footerStatus}>
+            <span style={{ ...s.statusDot, backgroundColor: "#10B981" }} />
+            총 {sent.length}건 · 답변대기 {sent.filter(r => !r.REPLY_CONTEXT).length}건
+          </span>
+          <button style={s.moreBtn} onClick={() => setShowSentAll(true)}>더보기 ›</button>
+        </>
       );
     }
     if (sec.id === "manager") {
@@ -554,7 +589,28 @@ export default function CommunicationBoardPage() {
           task={selectedTask}
           tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4}
           userMap={userMap}
+          deptUsers={deptUsers}
           onClose={() => setSelectedTask(null)}
+        />
+      )}
+
+      {/* ── 내가 받은 요청 전체 페이지 ── */}
+      {showReceivedAll && (
+        <ReceivedAllPage
+          user={user}
+          userMap={userMap}
+          onClose={() => setShowReceivedAll(false)}
+          onReply={r => { setReplyTarget(r); setShowReplyModal(true); }}
+        />
+      )}
+
+      {/* ── 내가 한 요청 전체 페이지 ── */}
+      {showSentAll && (
+        <SentAllPage
+          user={user}
+          userMap={userMap}
+          onClose={() => setShowSentAll(false)}
+          onEdit={i => { setEditSentTarget(i); setShowEditSentModal(true); }}
         />
       )}
     </div>
@@ -562,13 +618,18 @@ export default function CommunicationBoardPage() {
 }
 
 /* ═══════════════════════ 업무 상세 팝업 (읽기전용) ═══════════════════════ */
-function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
+function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, deptUsers = [], onClose }) {
   const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const hasIssue      = !!task.issue?.trim();
   const issueResolved = task.issueCompleteYn === "Y";
-  const getTaskName   = (arr, id) => arr.find(t => String(t.TASK_ID) === String(id))?.TASK_NAME || id || "";
+  const getTaskName   = (arr, id) => arr.find(x => String(x.TASK_ID) === String(id))?.TASK_NAME || id || "";
   const inp = { ...vs.input, ...vs.inputRO };
+
+  // 협업 동료 이름 목록
+  const coworkerNames = (task.coworkerIds || [])
+    .map(id => deptUsers.find(u => u.ID === id)?.NAME ?? userMap[id] ?? null)
+    .filter(Boolean);
 
   async function handleCopyText() {
     const line = (label, value) => value?.trim() ? `${label}: ${value.trim()}` : null;
@@ -578,11 +639,12 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
       "■ 업무 상세", sep,
       line("등록자",         registrantName),
       line("제목",           task.title),
-      line("상태",           STATUS_TEXT[task.status] ?? task.status),
+      line("상태",           STATUS_TEXT_MAP[task.status] ?? task.status),
       line("중요도",         task.priority),
       line("등록일자",       task.regDate),
       line("업무구분1",      getTaskName(tm1, task.taskType1Cd)),
       line("업무구분2",      getTaskName(tm2, task.taskType2Cd)),
+      coworkerNames.length > 0 ? `협업 동료: ${coworkerNames.join(", ")}` : null,
       line("작업완료예정일", task.plannedEnd),
       line("작업완료일",     task.actualEnd),
       line("연관페이지링크", task.relatedLink),
@@ -622,7 +684,7 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
             </div>
             <div style={vs.fieldWrap}>
               <label style={vs.label}>상태</label>
-              <input style={inp} type="text" readOnly value={STATUS_TEXT[task.status] || task.status} />
+              <input style={inp} type="text" readOnly value={STATUS_TEXT_MAP[task.status] || task.status} />
             </div>
           </div>
           <div style={vs.twoCol}>
@@ -653,6 +715,18 @@ function TaskDetailModal({ task, tm1, tm2, tm3, tm4, userMap, onClose }) {
             <div style={vs.fieldWrap}>
               <label style={vs.label}>등록자</label>
               <input style={inp} type="text" readOnly value={userMap[task.registrantId] ?? task.registrantId} />
+            </div>
+          </div>
+          {/* 협업 동료 */}
+          <div style={vs.fullRow}>
+            <label style={vs.label}>협업 동료</label>
+            <div style={vs.cwChipRow}>
+              {coworkerNames.length === 0
+                ? <span style={{ fontSize: "13px", color: "#94A3B8" }}>없음</span>
+                : coworkerNames.map(name => (
+                    <span key={name} style={vs.cwChip}>{name}</span>
+                  ))
+              }
             </div>
           </div>
           <div style={vs.fullRow}>
@@ -1159,7 +1233,8 @@ const s = {
   countBadge:  { fontSize: "11px", fontWeight: "700", padding: "3px 9px", borderRadius: "20px", border: "1px solid", whiteSpace: "nowrap" },
   divider:     { height: "1px", backgroundColor: "#F1F5F9", flexShrink: 0, margin: "0 16px" },
   cardBody:    { flex: 1, padding: "8px 12px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", minHeight: 0 },
-  cardFooter:  { padding: "8px 16px", borderTop: "1px solid #F8FAFC", flexShrink: 0, display: "flex", alignItems: "center" },
+  cardFooter:  { padding: "8px 16px", borderTop: "1px solid #F8FAFC", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" },
+  moreBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "11px", fontWeight: "600", color: "#3B82F6", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", flexShrink: 0 },
   footerStatus:{ display: "flex", alignItems: "center", gap: "5px", fontSize: "10px", color: "#94A3B8", fontWeight: "500" },
   statusDot:   { width: "5px", height: "5px", borderRadius: "50%", flexShrink: 0 },
 
@@ -1292,4 +1367,301 @@ const vs = {
   issueStatusLabel:   { fontSize: "12px", fontWeight: "500", color: "#64748B", flexShrink: 0 },
   issueStatusBadgeOk: { fontSize: "12px", fontWeight: "600", color: "#16A34A", backgroundColor: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: "4px", padding: "2px 9px" },
   issueStatusBadgeNg: { fontSize: "12px", fontWeight: "600", color: "#DC2626", backgroundColor: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: "4px", padding: "2px 9px" },
+  cwChipRow: { display: "flex", flexWrap: "wrap", gap: "6px", padding: "6px 0" },
+  cwChip: { fontSize: "12px", fontWeight: "500", color: "#1D4ED8", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "12px", padding: "3px 10px" },
+};
+
+/* ═══════════════════════ 내가 받은 요청 전체 페이지 ═══════════════════════ */
+function ReceivedAllPage({ user, userMap, onClose, onReply }) {
+  const [items,       setItems]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [searchFrom,  setSearchFrom]  = useState("");
+  const [searchTitle, setSearchTitle] = useState("");
+  const [replyTarget,      setReplyTarget]      = useState(null);
+  const [showReplyModal,   setShowReplyModal]   = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    supabase
+      .from("TASK_BOARD_REQUEST")
+      .select("*")
+      .eq("REQUEST_TO_ID", user.id)
+      .order("SYS_DT", { ascending: false })
+      .then(({ data }) => { setItems(data ?? []); setLoading(false); });
+  }, [user]);
+
+  const filtered = items.filter(item => {
+    const fromName = userMap[item.REQUEST_FROM_ID] ?? item.REQUEST_FROM_ID ?? "";
+    if (searchFrom.trim()  && !fromName.includes(searchFrom.trim()))             return false;
+    if (searchTitle.trim() && !item.REQUEST_TITLE?.includes(searchTitle.trim())) return false;
+    return true;
+  });
+
+  function handleReplySuccess() {
+    setShowReplyModal(false); setReplyTarget(null);
+    // 목록 새로고침
+    supabase.from("TASK_BOARD_REQUEST").select("*")
+      .eq("REQUEST_TO_ID", user.id).order("SYS_DT", { ascending: false })
+      .then(({ data }) => setItems(data ?? []));
+  }
+
+  return (
+    <div style={ap.overlay}>
+      <div style={ap.page}>
+        {/* 헤더 */}
+        <div style={ap.header}>
+          <div style={ap.headerLeft}>
+            <button style={ap.backBtn} onClick={onClose}>← 뒤로</button>
+            <div>
+              <h3 style={ap.title}>내가 받은 요청</h3>
+              <p style={ap.sub}>Requests Received · 전체 {items.length}건</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 검색 바 */}
+        <div style={ap.searchBar}>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>요청자</label>
+            <input
+              style={ap.searchInput}
+              placeholder="요청자 이름 검색"
+              value={searchFrom}
+              onChange={e => setSearchFrom(e.target.value)}
+            />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>요청제목</label>
+            <input
+              style={ap.searchInput}
+              placeholder="요청 제목 검색"
+              value={searchTitle}
+              onChange={e => setSearchTitle(e.target.value)}
+            />
+          </div>
+          <button style={ap.resetBtn} onClick={() => { setSearchFrom(""); setSearchTitle(""); }}>초기화</button>
+        </div>
+
+        {/* 테이블 */}
+        <div style={ap.tableWrap}>
+          {loading ? (
+            <div style={ap.loadingRow}>로딩 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={ap.emptyRow}>조건에 맞는 데이터가 없습니다.</div>
+          ) : (
+            <table style={ap.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...ap.th, width: "40px" }}>No</th>
+                  <th style={{ ...ap.th, width: "90px" }}>요청자</th>
+                  <th style={{ ...ap.th, width: "200px" }}>요청제목</th>
+                  <th style={ap.th}>요청내용</th>
+                  <th style={{ ...ap.th, width: "130px" }}>등록일시</th>
+                  <th style={{ ...ap.th, width: "80px" }}>답변여부</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => {
+                  const replied = !!item.REPLY_CONTEXT;
+                  return (
+                    <tr
+                      key={item.TASK_REQUEST_ID}
+                      style={ap.tr}
+                      onClick={() => { setReplyTarget(item); setShowReplyModal(true); }}
+                    >
+                      <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
+                      <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.REQUEST_FROM_ID] ?? item.REQUEST_FROM_ID}</td>
+                      <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.REQUEST_TITLE}</td>
+                      <td style={{ ...ap.td, color: "#64748B", maxWidth: "260px" }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.REQUEST_CONTEXT}
+                        </div>
+                      </td>
+                      <td style={{ ...ap.td, color: "#94A3B8", fontSize: "11px" }}>{formatDate(item.SYS_DT)}</td>
+                      <td style={{ ...ap.td, textAlign: "center" }}>
+                        <span style={replied ? ap.badgeOk : ap.badgePending}>
+                          {replied ? "✓ 답변완료" : "⏳ 미답변"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* 답변 팝업 */}
+        {showReplyModal && replyTarget && (
+          <ReplyModal
+            item={replyTarget}
+            userMap={userMap}
+            onClose={() => { setShowReplyModal(false); setReplyTarget(null); }}
+            onSuccess={handleReplySuccess}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ 내가 한 요청 전체 페이지 ═══════════════════════ */
+function SentAllPage({ user, userMap, onClose, onEdit }) {
+  const [items,       setItems]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [searchTo,    setSearchTo]    = useState("");
+  const [searchTitle, setSearchTitle] = useState("");
+  const [editTarget,       setEditTarget]       = useState(null);
+  const [showEditModal,    setShowEditModal]    = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    supabase
+      .from("TASK_BOARD_REQUEST")
+      .select("*")
+      .eq("REQUEST_FROM_ID", user.id)
+      .order("SYS_DT", { ascending: false })
+      .then(({ data }) => { setItems(data ?? []); setLoading(false); });
+  }, [user]);
+
+  const filtered = items.filter(item => {
+    const toName = userMap[item.REQUEST_TO_ID] ?? item.REQUEST_TO_ID ?? "";
+    if (searchTo.trim()    && !toName.includes(searchTo.trim()))                return false;
+    if (searchTitle.trim() && !item.REQUEST_TITLE?.includes(searchTitle.trim())) return false;
+    return true;
+  });
+
+  function handleEditSuccess() {
+    setShowEditModal(false); setEditTarget(null);
+    supabase.from("TASK_BOARD_REQUEST").select("*")
+      .eq("REQUEST_FROM_ID", user.id).order("SYS_DT", { ascending: false })
+      .then(({ data }) => setItems(data ?? []));
+  }
+
+  return (
+    <div style={ap.overlay}>
+      <div style={ap.page}>
+        {/* 헤더 */}
+        <div style={ap.header}>
+          <div style={ap.headerLeft}>
+            <button style={ap.backBtn} onClick={onClose}>← 뒤로</button>
+            <div>
+              <h3 style={ap.title}>내가 한 요청</h3>
+              <p style={ap.sub}>Requests Sent · 전체 {items.length}건</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 검색 바 */}
+        <div style={ap.searchBar}>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>수신자</label>
+            <input
+              style={ap.searchInput}
+              placeholder="수신자 이름 검색"
+              value={searchTo}
+              onChange={e => setSearchTo(e.target.value)}
+            />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>요청제목</label>
+            <input
+              style={ap.searchInput}
+              placeholder="요청 제목 검색"
+              value={searchTitle}
+              onChange={e => setSearchTitle(e.target.value)}
+            />
+          </div>
+          <button style={ap.resetBtn} onClick={() => { setSearchTo(""); setSearchTitle(""); }}>초기화</button>
+        </div>
+
+        {/* 테이블 */}
+        <div style={ap.tableWrap}>
+          {loading ? (
+            <div style={ap.loadingRow}>로딩 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={ap.emptyRow}>조건에 맞는 데이터가 없습니다.</div>
+          ) : (
+            <table style={ap.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...ap.th, width: "40px" }}>No</th>
+                  <th style={{ ...ap.th, width: "90px" }}>수신자</th>
+                  <th style={{ ...ap.th, width: "200px" }}>요청제목</th>
+                  <th style={ap.th}>요청내용</th>
+                  <th style={{ ...ap.th, width: "130px" }}>등록일시</th>
+                  <th style={{ ...ap.th, width: "80px" }}>답변여부</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => {
+                  const replied = !!item.REPLY_CONTEXT;
+                  return (
+                    <tr
+                      key={item.TASK_REQUEST_ID}
+                      style={ap.tr}
+                      onClick={() => { setEditTarget(item); setShowEditModal(true); }}
+                    >
+                      <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
+                      <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.REQUEST_TO_ID] ?? item.REQUEST_TO_ID}</td>
+                      <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.REQUEST_TITLE}</td>
+                      <td style={{ ...ap.td, color: "#64748B", maxWidth: "260px" }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {item.REQUEST_CONTEXT}
+                        </div>
+                      </td>
+                      <td style={{ ...ap.td, color: "#94A3B8", fontSize: "11px" }}>{formatDate(item.SYS_DT)}</td>
+                      <td style={{ ...ap.td, textAlign: "center" }}>
+                        <span style={replied ? ap.badgeOk : ap.badgePending}>
+                          {replied ? "✓ 답변완료" : "⏳ 미답변"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* 수정 팝업 */}
+        {showEditModal && editTarget && (
+          <EditSentModal
+            user={user}
+            item={editTarget}
+            userMap={userMap}
+            onClose={() => { setShowEditModal(false); setEditTarget(null); }}
+            onSuccess={handleEditSuccess}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ 전체 페이지 스타일 ═══════════════════════ */
+const ap = {
+  overlay: { position: "fixed", inset: 0, backgroundColor: "#F8FAFC", zIndex: 900, display: "flex", flexDirection: "column", fontFamily: "'Pretendard', sans-serif" },
+  page:    { display: "flex", flexDirection: "column", height: "100%", maxWidth: "1200px", margin: "0 auto", width: "100%", padding: "0 24px", boxSizing: "border-box" },
+  header:  { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 0 16px", borderBottom: "1px solid #E2E8F0", flexShrink: 0 },
+  headerLeft: { display: "flex", alignItems: "center", gap: "16px" },
+  backBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#475569", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "6px", padding: "7px 14px", cursor: "pointer" },
+  title:   { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: "0 0 2px" },
+  sub:     { fontSize: "12px", color: "#94A3B8", margin: 0 },
+  searchBar: { display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "8px", padding: "12px 16px", margin: "14px 0", flexShrink: 0 },
+  searchField: { display: "flex", alignItems: "center", gap: "8px" },
+  searchLabel: { fontSize: "12px", fontWeight: "600", color: "#475569", whiteSpace: "nowrap" },
+  searchInput: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "6px", padding: "7px 10px", outline: "none", minWidth: "160px" },
+  resetBtn:    { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#64748B", backgroundColor: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: "6px", padding: "7px 14px", cursor: "pointer" },
+  tableWrap:   { flex: 1, overflowY: "auto", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "8px" },
+  table:       { width: "100%", borderCollapse: "collapse", fontSize: "13px" },
+  th: { padding: "11px 14px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748B", backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", whiteSpace: "nowrap", letterSpacing: "0.03em", position: "sticky", top: 0, zIndex: 1 },
+  tr: { borderBottom: "1px solid #F1F5F9", cursor: "pointer", transition: "background 0.12s" },
+  td: { padding: "11px 14px", fontSize: "13px", color: "#475569", verticalAlign: "middle" },
+  loadingRow:  { padding: "40px", textAlign: "center", fontSize: "13px", color: "#94A3B8" },
+  emptyRow:    { padding: "40px", textAlign: "center", fontSize: "13px", color: "#94A3B8" },
+  badgeOk:     { fontSize: "10px", fontWeight: "600", color: "#10B981", backgroundColor: "#10B98112", border: "1px solid #10B98130", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  badgePending:{ fontSize: "10px", fontWeight: "600", color: "#F59E0B", backgroundColor: "#F59E0B12", border: "1px solid #F59E0B30", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
 };
