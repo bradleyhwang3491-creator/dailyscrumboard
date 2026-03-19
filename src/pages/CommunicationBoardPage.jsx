@@ -264,6 +264,8 @@ export default function CommunicationBoardPage() {
   const [editSentTarget,      setEditSentTarget]      = useState(null);
   const [showReceivedAll,     setShowReceivedAll]     = useState(false);
   const [showSentAll,         setShowSentAll]         = useState(false);
+  const [showManagerAll,      setShowManagerAll]      = useState(false);
+  const [showIssueAll,        setShowIssueAll]        = useState(false);
 
   /* 답변팝업 내에서 다시 열기용 */
   const [replyFromAll,        setReplyFromAll]        = useState(false);
@@ -468,19 +470,25 @@ export default function CommunicationBoardPage() {
     }
     if (sec.id === "manager") {
       return (
-        <span style={s.footerStatus}>
-          <span style={{ ...s.statusDot, backgroundColor: "#8B5CF6" }} />
-          최근 1개월 · {managerItems.length}건
-        </span>
+        <>
+          <span style={s.footerStatus}>
+            <span style={{ ...s.statusDot, backgroundColor: "#8B5CF6" }} />
+            최근 1개월 · {managerItems.length}건
+          </span>
+          <button style={{ ...s.moreBtn, color: "#8B5CF6" }} onClick={() => setShowManagerAll(true)}>더보기 ›</button>
+        </>
       );
     }
     if (sec.id === "issue") {
       const unresolved = issueItems.filter(t => t.issueCompleteYn !== "Y").length;
       return (
-        <span style={s.footerStatus}>
-          <span style={{ ...s.statusDot, backgroundColor: "#EF4444" }} />
-          최근 1개월 · 미해결 {unresolved}건
-        </span>
+        <>
+          <span style={s.footerStatus}>
+            <span style={{ ...s.statusDot, backgroundColor: "#EF4444" }} />
+            최근 1개월 · 미해결 {unresolved}건
+          </span>
+          <button style={{ ...s.moreBtn, color: "#EF4444" }} onClick={() => setShowIssueAll(true)}>더보기 ›</button>
+        </>
       );
     }
   }
@@ -611,6 +619,28 @@ export default function CommunicationBoardPage() {
           userMap={userMap}
           onClose={() => setShowSentAll(false)}
           onEdit={i => { setEditSentTarget(i); setShowEditSentModal(true); }}
+        />
+      )}
+
+      {/* ── 이슈내용 전체 페이지 ── */}
+      {showIssueAll && (
+        <IssueAllPage
+          user={user}
+          userMap={userMap}
+          tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4}
+          deptUsers={deptUsers}
+          onClose={() => setShowIssueAll(false)}
+        />
+      )}
+
+      {/* ── 팀장 요청내용 전체 페이지 ── */}
+      {showManagerAll && (
+        <ManagerAllPage
+          user={user}
+          userMap={userMap}
+          tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4}
+          deptUsers={deptUsers}
+          onClose={() => setShowManagerAll(false)}
         />
       )}
     </div>
@@ -1641,6 +1671,243 @@ function SentAllPage({ user, userMap, onClose, onEdit }) {
   );
 }
 
+/* ═══════════════════════ 이슈내용 전체 페이지 ═══════════════════════ */
+function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose }) {
+  const [items,       setItems]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [searchReg,   setSearchReg]   = useState("");
+  const [searchTitle, setSearchTitle] = useState("");
+  const [searchIssue, setSearchIssue] = useState("");
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  useEffect(() => {
+    const dept = user?.deptCd;
+    if (!dept) return;
+    setLoading(true);
+    supabase
+      .from("TASK_BOARD")
+      .select("*")
+      .eq("DEPT_CD", dept)
+      .not("ISSUE", "is", null)
+      .neq("ISSUE", "")
+      .order("INSERT_DATE", { ascending: false })
+      .then(({ data }) => {
+        setItems((data ?? []).map(mapTaskBoardRow));
+        setLoading(false);
+      });
+  }, [user]);
+
+  const filtered = items.filter(item => {
+    const regName = userMap[item.registrantId] ?? item.registrantId ?? "";
+    if (searchReg.trim()   && !regName.includes(searchReg.trim()))         return false;
+    if (searchTitle.trim() && !item.title?.includes(searchTitle.trim()))   return false;
+    if (searchIssue.trim() && !item.issue?.includes(searchIssue.trim()))   return false;
+    return true;
+  });
+
+  return (
+    <div style={ap.overlay}>
+      <div style={ap.page}>
+        <div style={ap.header}>
+          <div style={ap.headerLeft}>
+            <button style={ap.backBtn} onClick={onClose}>← 뒤로</button>
+            <div>
+              <h3 style={ap.title}>이슈내용 아카이브</h3>
+              <p style={ap.sub}>Issues · 전체 {items.length}건 · 미해결 {items.filter(t => t.issueCompleteYn !== "Y").length}건</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={ap.searchBar}>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>등록자</label>
+            <input style={ap.searchInput} placeholder="등록자 검색" value={searchReg}
+              onChange={e => setSearchReg(e.target.value)} />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>제목</label>
+            <input style={ap.searchInput} placeholder="제목 검색" value={searchTitle}
+              onChange={e => setSearchTitle(e.target.value)} />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>이슈내용</label>
+            <input style={ap.searchInput} placeholder="이슈내용 검색" value={searchIssue}
+              onChange={e => setSearchIssue(e.target.value)} />
+          </div>
+          <button style={ap.resetBtn} onClick={() => { setSearchReg(""); setSearchTitle(""); setSearchIssue(""); }}>초기화</button>
+        </div>
+
+        <div style={ap.tableWrap}>
+          {loading ? (
+            <div style={ap.loadingRow}>로딩 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={ap.emptyRow}>조건에 맞는 데이터가 없습니다.</div>
+          ) : (
+            <table style={ap.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...ap.th, width: "40px" }}>No</th>
+                  <th style={{ ...ap.th, width: "80px" }}>등록자</th>
+                  <th style={{ ...ap.th, width: "180px" }}>제목</th>
+                  <th style={{ ...ap.th, width: "100px" }}>등록일자</th>
+                  <th style={{ ...ap.th, width: "80px" }}>상태</th>
+                  <th style={ap.th}>이슈사항</th>
+                  <th style={{ ...ap.th, width: "90px" }}>이슈해결여부</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => (
+                  <tr key={item.id} style={ap.tr} onClick={() => setSelectedTask(item)}>
+                    <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
+                    <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.registrantId] ?? item.registrantId}</td>
+                    <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.title}</td>
+                    <td style={{ ...ap.td, color: "#94A3B8", fontSize: "11px" }}>{formatDate8(item.rawInsert)}</td>
+                    <td style={{ ...ap.td, textAlign: "center" }}>
+                      <span style={{ ...ap.statusBadge, ...ap.statusColors[item.status] }}>
+                        {STATUS_TEXT_MAP[item.status] ?? item.status}
+                      </span>
+                    </td>
+                    <td style={{ ...ap.td, color: "#64748B", maxWidth: "300px" }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.issue}</div>
+                    </td>
+                    <td style={{ ...ap.td, textAlign: "center" }}>
+                      {item.issueCompleteYn === "Y"
+                        ? <span style={ap.badgeOk}>✓ 해결</span>
+                        : <span style={ap.badgePending}>⏳ 미해결</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {selectedTask && (
+          <TaskDetailModal
+            task={selectedTask}
+            tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4}
+            userMap={userMap}
+            deptUsers={deptUsers}
+            onClose={() => setSelectedTask(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ 팀장 요청내용 전체 페이지 ═══════════════════════ */
+function ManagerAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose }) {
+  const [items,       setItems]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [searchReg,   setSearchReg]   = useState("");
+  const [searchTitle, setSearchTitle] = useState("");
+  const [selectedTask, setSelectedTask] = useState(null);
+
+  useEffect(() => {
+    const dept = user?.deptCd;
+    if (!dept) return;
+    setLoading(true);
+    supabase
+      .from("TASK_BOARD")
+      .select("*")
+      .eq("DEPT_CD", dept)
+      .not("LEADER_KNOW", "is", null)
+      .neq("LEADER_KNOW", "")
+      .order("INSERT_DATE", { ascending: false })
+      .then(({ data }) => {
+        setItems((data ?? []).map(mapTaskBoardRow));
+        setLoading(false);
+      });
+  }, [user]);
+
+  const filtered = items.filter(item => {
+    const regName = userMap[item.registrantId] ?? item.registrantId ?? "";
+    if (searchReg.trim()   && !regName.includes(searchReg.trim()))       return false;
+    if (searchTitle.trim() && !item.title?.includes(searchTitle.trim())) return false;
+    return true;
+  });
+
+  return (
+    <div style={ap.overlay}>
+      <div style={ap.page}>
+        <div style={ap.header}>
+          <div style={ap.headerLeft}>
+            <button style={ap.backBtn} onClick={onClose}>← 뒤로</button>
+            <div>
+              <h3 style={ap.title}>팀장 요청내용 아카이브</h3>
+              <p style={ap.sub}>Manager Requests · 전체 {items.length}건</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={ap.searchBar}>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>등록자</label>
+            <input style={ap.searchInput} placeholder="등록자 검색" value={searchReg}
+              onChange={e => setSearchReg(e.target.value)} />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>제목</label>
+            <input style={ap.searchInput} placeholder="제목 검색" value={searchTitle}
+              onChange={e => setSearchTitle(e.target.value)} />
+          </div>
+          <button style={ap.resetBtn} onClick={() => { setSearchReg(""); setSearchTitle(""); }}>초기화</button>
+        </div>
+
+        <div style={ap.tableWrap}>
+          {loading ? (
+            <div style={ap.loadingRow}>로딩 중...</div>
+          ) : filtered.length === 0 ? (
+            <div style={ap.emptyRow}>조건에 맞는 데이터가 없습니다.</div>
+          ) : (
+            <table style={ap.table}>
+              <thead>
+                <tr>
+                  <th style={{ ...ap.th, width: "40px" }}>No</th>
+                  <th style={{ ...ap.th, width: "80px" }}>등록자</th>
+                  <th style={{ ...ap.th, width: "180px" }}>제목</th>
+                  <th style={{ ...ap.th, width: "100px" }}>등록일자</th>
+                  <th style={{ ...ap.th, width: "80px" }}>상태</th>
+                  <th style={ap.th}>팀장공유내용</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => (
+                  <tr key={item.id} style={ap.tr} onClick={() => setSelectedTask(item)}>
+                    <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
+                    <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.registrantId] ?? item.registrantId}</td>
+                    <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.title}</td>
+                    <td style={{ ...ap.td, color: "#94A3B8", fontSize: "11px" }}>{formatDate8(item.rawInsert)}</td>
+                    <td style={{ ...ap.td, textAlign: "center" }}>
+                      <span style={{ ...ap.statusBadge, ...ap.statusColors[item.status] }}>
+                        {STATUS_TEXT_MAP[item.status] ?? item.status}
+                      </span>
+                    </td>
+                    <td style={{ ...ap.td, color: "#64748B", maxWidth: "360px" }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.teamNote}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {selectedTask && (
+          <TaskDetailModal
+            task={selectedTask}
+            tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4}
+            userMap={userMap}
+            deptUsers={deptUsers}
+            onClose={() => setSelectedTask(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════ 전체 페이지 스타일 ═══════════════════════ */
 const ap = {
   overlay: { position: "fixed", inset: 0, backgroundColor: "#F8FAFC", zIndex: 900, display: "flex", flexDirection: "column", fontFamily: "'Pretendard', sans-serif" },
@@ -1664,4 +1931,11 @@ const ap = {
   emptyRow:    { padding: "40px", textAlign: "center", fontSize: "13px", color: "#94A3B8" },
   badgeOk:     { fontSize: "10px", fontWeight: "600", color: "#10B981", backgroundColor: "#10B98112", border: "1px solid #10B98130", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
   badgePending:{ fontSize: "10px", fontWeight: "600", color: "#F59E0B", backgroundColor: "#F59E0B12", border: "1px solid #F59E0B30", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  statusBadge: { fontSize: "10px", fontWeight: "600", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  statusColors: {
+    TODO:     { color: "#64748B", backgroundColor: "#F1F5F9",   border: "1px solid #CBD5E1" },
+    PROGRESS: { color: "#2563EB", backgroundColor: "#EFF6FF",   border: "1px solid #BFDBFE" },
+    HOLDING:  { color: "#D97706", backgroundColor: "#FFFBEB",   border: "1px solid #FDE68A" },
+    COMPLETE: { color: "#16A34A", backgroundColor: "#F0FDF4",   border: "1px solid #BBF7D0" },
+  },
 };
