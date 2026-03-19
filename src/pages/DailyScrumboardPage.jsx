@@ -264,6 +264,12 @@ function DailyScrumboardPage() {
   /* ── 수정 저장 ── */
   async function handleUpdate() {
     if (!editForm.title.trim()) return;
+
+    // 완료 처리 시 작업완료일자 필수 체크
+    if (editForm.status === "COMPLETE" && !editForm.actualEnd) {
+      alert("⚠️ 완료 처리를 하려면 작업완료일자를 입력해 주세요.\n\n'작업완료일자' 항목에 날짜를 입력한 후 다시 저장해 주세요.");
+      return;
+    }
     setEditLoading(true);
     const { error } = await supabase.from("TASK_BOARD").update({
       TITLE:           editForm.title.trim(),
@@ -449,6 +455,13 @@ function DailyScrumboardPage() {
 
     const card = tasks.find((t) => t.id === dragCardId);
     if (!card || card.status === colId) { setDragCardId(null); return; }
+
+    // 완료 처리 시 작업완료일자 필수 체크
+    if (colId === "COMPLETE" && !card.actualEnd) {
+      alert("⚠️ 완료 처리를 하려면 작업완료일자를 먼저 입력해 주세요.\n\n업무 카드를 클릭하여 수정 화면에서 작업완료일자를 입력한 후 다시 시도해 주세요.");
+      setDragCardId(null);
+      return;
+    }
 
     // 낙관적 업데이트: UI 먼저 반영
     setTasks((prev) =>

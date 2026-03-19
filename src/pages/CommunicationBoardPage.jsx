@@ -1673,47 +1673,84 @@ function SentAllPage({ user, userMap, onClose, onEdit }) {
 
 /* ═══════════════════════ 이슈내용 전체 페이지 ═══════════════════════ */
 function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose }) {
-  const [items,       setItems]       = useState([]);
-  const [loading,     setLoading]     = useState(false);
-  const [searchReg,   setSearchReg]   = useState("");
-  const [searchTitle, setSearchTitle] = useState("");
-  const [searchIssue, setSearchIssue] = useState("");
-  const [dateFrom,    setDateFrom]    = useState("");
-  const [dateTo,      setDateTo]      = useState("");
+  const getOneMonthAgo = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split("T")[0];
+  };
+  const getTodayStr = () => new Date().toISOString().split("T")[0];
+
+  const [items,        setItems]       = useState([]);
+  const [loading,      setLoading]     = useState(false);
+  const [searchReg,    setSearchReg]   = useState("");
+  const [searchTitle,  setSearchTitle] = useState("");
+  const [searchIssue,  setSearchIssue] = useState("");
+  const [dateFrom,     setDateFrom]    = useState(getOneMonthAgo);
+  const [dateTo,       setDateTo]      = useState(getTodayStr);
   const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
+    fetchItems({});
+  }, [user]);
+
+  async function fetchItems(overrides = {}) {
     const dept = user?.deptCd;
     if (!dept) return;
     setLoading(true);
-    supabase
+
+    const reg   = "searchReg"   in overrides ? overrides.searchReg   : searchReg;
+    const title = "searchTitle" in overrides ? overrides.searchTitle : searchTitle;
+    const issue = "searchIssue" in overrides ? overrides.searchIssue : searchIssue;
+    const from  = "dateFrom"    in overrides ? overrides.dateFrom    : dateFrom;
+    const to    = "dateTo"      in overrides ? overrides.dateTo      : dateTo;
+
+    let query = supabase
       .from("TASK_BOARD")
       .select("*")
       .eq("DEPT_CD", dept)
       .not("ISSUE", "is", null)
       .neq("ISSUE", "")
-      .order("INSERT_DATE", { ascending: false })
-      .then(({ data }) => {
-        setItems((data ?? []).map(mapTaskBoardRow));
-        setLoading(false);
-      });
-  }, [user]);
+      .order("INSERT_DATE", { ascending: false });
 
-  const filtered = items.filter(item => {
-    const regName = userMap[item.registrantId] ?? item.registrantId ?? "";
-    if (searchReg.trim()   && !regName.includes(searchReg.trim()))         return false;
-    if (searchTitle.trim() && !item.title?.includes(searchTitle.trim()))   return false;
-    if (searchIssue.trim() && !item.issue?.includes(searchIssue.trim()))   return false;
-    if (dateFrom) {
-      const from8 = dateFrom.replace(/-/g, "");
-      if (item.rawInsert < from8) return false;
+    if (reg.trim()) {
+      const matchingIds = Object.entries(userMap)
+        .filter(([, name]) => name.includes(reg.trim()))
+        .map(([id]) => id);
+      if (matchingIds.length === 0) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+      query = query.in("ID", matchingIds);
     }
-    if (dateTo) {
-      const to8 = dateTo.replace(/-/g, "");
-      if (item.rawInsert > to8) return false;
+
+    if (title.trim()) {
+      query = query.ilike("TITLE", `%${title.trim()}%`);
     }
-    return true;
-  });
+
+    if (issue.trim()) {
+      query = query.ilike("ISSUE", `%${issue.trim()}%`);
+    }
+
+    if (from) {
+      query = query.gte("INSERT_DATE", from.replace(/-/g, ""));
+    }
+    if (to) {
+      query = query.lte("INSERT_DATE", to.replace(/-/g, ""));
+    }
+
+    const { data } = await query;
+    setItems((data ?? []).map(mapTaskBoardRow));
+    setLoading(false);
+  }
+
+  function handleReset() {
+    const from = getOneMonthAgo();
+    const to   = getTodayStr();
+    setSearchReg(""); setSearchTitle(""); setSearchIssue("");
+    setDateFrom(from); setDateTo(to);
+    fetchItems({ searchReg: "", searchTitle: "", searchIssue: "", dateFrom: from, dateTo: to });
+  }
 
   return (
     <div style={ap.overlay}>
@@ -1754,13 +1791,14 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                 value={dateTo} onChange={e => setDateTo(e.target.value)} />
             </div>
           </div>
-          <button style={ap.resetBtn} onClick={() => { setSearchReg(""); setSearchTitle(""); setSearchIssue(""); setDateFrom(""); setDateTo(""); }}>초기화</button>
+          <button style={ap.searchBtn} onClick={() => fetchItems({})}>조회</button>
+          <button style={ap.resetBtn} onClick={handleReset}>초기화</button>
         </div>
 
         <div style={ap.tableWrap}>
           {loading ? (
             <div style={ap.loadingRow}>로딩 중...</div>
-          ) : filtered.length === 0 ? (
+          ) : items.length === 0 ? (
             <div style={ap.emptyRow}>조건에 맞는 데이터가 없습니다.</div>
           ) : (
             <table style={ap.table}>
@@ -1776,7 +1814,7 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item, idx) => (
+                {items.map((item, idx) => (
                   <tr key={item.id} style={ap.tr} onClick={() => setSelectedTask(item)}>
                     <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
                     <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.registrantId] ?? item.registrantId}</td>
@@ -1941,6 +1979,7 @@ const ap = {
   searchField: { display: "flex", alignItems: "center", gap: "8px" },
   searchLabel: { fontSize: "12px", fontWeight: "600", color: "#475569", whiteSpace: "nowrap" },
   searchInput: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "6px", padding: "7px 10px", outline: "none", minWidth: "160px" },
+  searchBtn:   { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none", borderRadius: "6px", padding: "7px 16px", cursor: "pointer" },
   resetBtn:    { fontFamily: "'Pretendard', sans-serif", fontSize: "12px", color: "#64748B", backgroundColor: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: "6px", padding: "7px 14px", cursor: "pointer" },
   tableWrap:   { flex: 1, overflowY: "auto", backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "8px" },
   table:       { width: "100%", borderCollapse: "collapse", fontSize: "13px" },
