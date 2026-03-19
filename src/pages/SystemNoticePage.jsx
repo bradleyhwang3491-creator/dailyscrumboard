@@ -82,20 +82,22 @@ export default function SystemNoticePage() {
         }
       }
     } else {
-      // 등록 — 대문자 컬럼명으로 시도
-      let { error } = await supabase
+      // 다음 ID 계산 (ID 컬럼이 자동증가 미설정인 경우 대비)
+      const { data: maxRow } = await supabase
         .from("SYSTEM_UPDATE_NOTIFY")
-        .insert({ TITLE: form.TITLE.trim(), CONTENT: form.CONTENT.trim(), REG_NM, REG_DATE: now });
+        .select("ID")
+        .order("ID", { ascending: false })
+        .limit(1);
+      const nextId = ((maxRow?.[0]?.ID ?? maxRow?.[0]?.id ?? 0) + 1);
+
+      // 등록
+      const { error } = await supabase
+        .from("SYSTEM_UPDATE_NOTIFY")
+        .insert({ ID: nextId, TITLE: form.TITLE.trim(), CONTENT: form.CONTENT.trim(), REG_NM, REG_DATE: now });
 
       if (error) {
-        // 소문자 컬럼명 fallback (Supabase UI로 테이블 생성 시 소문자)
-        const res2 = await supabase
-          .from("SYSTEM_UPDATE_NOTIFY")
-          .insert({ title: form.TITLE.trim(), content: form.CONTENT.trim(), reg_nm: REG_NM, reg_date: now });
-        if (res2.error) {
-          setSaveErr(`등록 실패 (${error.message}) — Supabase SQL Editor에서 아래 SQL을 실행해주세요:\nGRANT ALL ON TABLE "SYSTEM_UPDATE_NOTIFY" TO anon;\nGRANT ALL ON TABLE "SYSTEM_UPDATE_NOTIFY" TO authenticated;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;`);
-          setSaving(false); return;
-        }
+        setSaveErr(`등록 실패: ${error.message}`);
+        setSaving(false); return;
       }
     }
     setSaving(false);
