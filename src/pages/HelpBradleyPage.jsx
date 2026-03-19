@@ -156,7 +156,7 @@ export default function HelpBradleyPage() {
       {/* 헤더 */}
       <div style={p.topBar}>
         <div>
-          <h2 style={p.pageTitle}>◇ HELP BRADLEY!</h2>
+          <h2 style={p.pageTitle}>HELP BRADLEY!</h2>
           <p style={p.pageSub}>시스템 개발 요청 게시판 · 총 {items.length}건</p>
         </div>
         <button style={p.addBtn} onClick={openCreate}>+ 개발 요청 등록</button>
