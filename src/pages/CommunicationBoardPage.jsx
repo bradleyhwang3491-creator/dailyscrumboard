@@ -1678,6 +1678,8 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
   const [searchReg,   setSearchReg]   = useState("");
   const [searchTitle, setSearchTitle] = useState("");
   const [searchIssue, setSearchIssue] = useState("");
+  const [dateFrom,    setDateFrom]    = useState("");
+  const [dateTo,      setDateTo]      = useState("");
   const [selectedTask, setSelectedTask] = useState(null);
 
   useEffect(() => {
@@ -1702,6 +1704,14 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
     if (searchReg.trim()   && !regName.includes(searchReg.trim()))         return false;
     if (searchTitle.trim() && !item.title?.includes(searchTitle.trim()))   return false;
     if (searchIssue.trim() && !item.issue?.includes(searchIssue.trim()))   return false;
+    if (dateFrom) {
+      const from8 = dateFrom.replace(/-/g, "");
+      if (item.rawInsert < from8) return false;
+    }
+    if (dateTo) {
+      const to8 = dateTo.replace(/-/g, "");
+      if (item.rawInsert > to8) return false;
+    }
     return true;
   });
 
@@ -1734,7 +1744,17 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
             <input style={ap.searchInput} placeholder="이슈내용 검색" value={searchIssue}
               onChange={e => setSearchIssue(e.target.value)} />
           </div>
-          <button style={ap.resetBtn} onClick={() => { setSearchReg(""); setSearchTitle(""); setSearchIssue(""); }}>초기화</button>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>등록일자</label>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <input type="date" style={{ ...ap.searchInput, width: "130px", cursor: "pointer" }}
+                value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <span style={{ color: "#94A3B8", fontSize: "12px" }}>~</span>
+              <input type="date" style={{ ...ap.searchInput, width: "130px", cursor: "pointer" }}
+                value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
+          </div>
+          <button style={ap.resetBtn} onClick={() => { setSearchReg(""); setSearchTitle(""); setSearchIssue(""); setDateFrom(""); setDateTo(""); }}>초기화</button>
         </div>
 
         <div style={ap.tableWrap}>
