@@ -14,6 +14,7 @@ import WeeklyTaskBoardPage from "./WeeklyTaskBoardPage";
 import CommunicationBoardPage from "./CommunicationBoardPage";
 import GanttChartPage from "./GanttChartPage";
 import SystemNoticePage from "./SystemNoticePage";
+import HelpBradleyPage from "./HelpBradleyPage";
 
 const ADMIN_ID = "SUNGHYUN_HWANG";
 const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
@@ -354,6 +355,7 @@ function MainPage() {
     { id: "ai-report",        label: t("nav.menus.aiWeeklyReport"),        emoji: "◉" },
     { id: "user-mgmt",        label: t("nav.menus.userManagement"),        emoji: "◎", adminOnly: true },
     { id: "system-notice",    label: "시스템공지",                          emoji: "📢", noticeAdminOnly: true },
+    { id: "help-bradley",     label: "HELP BRADLEY!",                      emoji: "🙋" },
   ];
 
   function handleLogout() {
@@ -468,7 +470,9 @@ function MainPage() {
             </div>
           )}
 
-          {activeMenu === "system-notice" ? (
+          {activeMenu === "help-bradley" ? (
+            <HelpBradleyPage />
+          ) : activeMenu === "system-notice" ? (
             <SystemNoticePage />
           ) : activeMenu === "user-mgmt" ? (
             <UserManagementPage />
