@@ -1688,6 +1688,9 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
   const [dateFrom,     setDateFrom]    = useState(getOneMonthAgo);
   const [dateTo,       setDateTo]      = useState(getTodayStr);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [selectedRowId, setSelectedRowId] = useState(null);
+  const [solutionMap,  setSolutionMap]  = useState({});
+  const [solutionModal, setSolutionModal] = useState(null);
 
   useEffect(() => {
     fetchItems({});
@@ -1740,7 +1743,23 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
     }
 
     const { data } = await query;
-    setItems((data ?? []).map(mapTaskBoardRow));
+    const mapped = (data ?? []).map(mapTaskBoardRow);
+    setItems(mapped);
+
+    // 해결방안 조회
+    if (mapped.length > 0) {
+      const boardIds = mapped.map(r => r.id);
+      const { data: sols } = await supabase
+        .from("TASK_BOARD_ISSUE_SOLUTION")
+        .select("*")
+        .in("TASK_BOARD_ID", boardIds);
+      const map = {};
+      (sols ?? []).forEach(s => { map[s.TASK_BOARD_ID] = s; });
+      setSolutionMap(map);
+    } else {
+      setSolutionMap({});
+    }
+
     setLoading(false);
   }
 
@@ -1763,6 +1782,16 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
               <p style={ap.sub}>Issues · 전체 {items.length}건 · 미해결 {items.filter(t => t.issueCompleteYn !== "Y").length}건</p>
             </div>
           </div>
+          <button
+            style={{ ...ap.searchBtn, backgroundColor: selectedRowId ? "#10B981" : "#CBD5E1", cursor: selectedRowId ? "pointer" : "not-allowed", transition: "background 0.2s" }}
+            disabled={!selectedRowId}
+            onClick={() => {
+              const task = items.find(i => i.id === selectedRowId);
+              if (task) setSolutionModal({ task, existing: solutionMap[selectedRowId] ?? null });
+            }}
+          >
+            💡 이슈 해결
+          </button>
         </div>
 
         <div style={ap.searchBar}>
@@ -1811,11 +1840,16 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                   <th style={{ ...ap.th, width: "80px" }}>상태</th>
                   <th style={ap.th}>이슈사항</th>
                   <th style={{ ...ap.th, width: "90px" }}>이슈해결여부</th>
+                  <th style={{ ...ap.th, width: "110px" }}>해결방안</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, idx) => (
-                  <tr key={item.id} style={ap.tr} onClick={() => setSelectedTask(item)}>
+                  <tr
+                    key={item.id}
+                    style={{ ...ap.tr, backgroundColor: selectedRowId === item.id ? "#EFF6FF" : undefined }}
+                    onClick={() => { setSelectedRowId(item.id); setSelectedTask(item); }}
+                  >
                     <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
                     <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.registrantId] ?? item.registrantId}</td>
                     <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.title}</td>
@@ -1833,6 +1867,18 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                         ? <span style={ap.badgeOk}>✓ 해결</span>
                         : <span style={ap.badgePending}>⏳ 미해결</span>}
                     </td>
+                    <td style={{ ...ap.td, textAlign: "center" }}>
+                      {solutionMap[item.id] ? (
+                        <span
+                          style={ap.badgeSolution}
+                          onClick={(e) => { e.stopPropagation(); setSolutionModal({ task: item, existing: solutionMap[item.id] }); }}
+                        >
+                          💡 해결방안기록
+                        </span>
+                      ) : (
+                        <span style={{ color: "#CBD5E1", fontSize: "11px" }}>-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1849,6 +1895,90 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
             onClose={() => setSelectedTask(null)}
           />
         )}
+
+        {solutionModal && (
+          <IssueSolutionModal
+            task={solutionModal.task}
+            existing={solutionModal.existing}
+            user={user}
+            onClose={() => setSolutionModal(null)}
+            onSuccess={() => { setSolutionModal(null); fetchItems({}); }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ 이슈 해결방안 모달 ═══════════════════════ */
+function IssueSolutionModal({ task, existing, user, onClose, onSuccess }) {
+  const [title,    setTitle]    = useState(existing?.ISSUE_TITLE    ?? "");
+  const [solution, setSolution] = useState(existing?.SOLUTION_TEXT  ?? "");
+  const [loading,  setLoading]  = useState(false);
+
+  async function handleSave() {
+    if (!title.trim())    { alert("제목을 입력해 주세요."); return; }
+    if (!solution.trim()) { alert("해결책을 입력해 주세요."); return; }
+    setLoading(true);
+    let error;
+    if (existing) {
+      ({ error } = await supabase
+        .from("TASK_BOARD_ISSUE_SOLUTION")
+        .update({ ISSUE_TITLE: title.trim(), SOLUTION_TEXT: solution.trim() })
+        .eq("ISSUE_ID", existing.ISSUE_ID));
+    } else {
+      ({ error } = await supabase
+        .from("TASK_BOARD_ISSUE_SOLUTION")
+        .insert({ TASK_BOARD_ID: task.id, ISSUE_TITLE: title.trim(), SOLUTION_TEXT: solution.trim(), USER_ID: user?.id ?? null }));
+    }
+    setLoading(false);
+    if (error) { alert("저장 중 오류가 발생했습니다.\n" + error.message); return; }
+    onSuccess();
+  }
+
+  return (
+    <div style={sm.overlay} onClick={onClose}>
+      <div style={sm.modal} onClick={e => e.stopPropagation()}>
+        <div style={sm.header}>
+          <div>
+            <h3 style={sm.title}>💡 이슈 해결방안 {existing ? "수정" : "등록"}</h3>
+            <p style={sm.sub}>이슈 : {task.title}</p>
+          </div>
+          <button style={sm.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={sm.issueBox}>
+          <span style={sm.issueLabel}>이슈내용</span>
+          <p style={sm.issueText}>{task.issue}</p>
+        </div>
+
+        <div style={sm.fieldWrap}>
+          <label style={sm.label}>제목 <span style={{ color: "#EF4444" }}>*</span></label>
+          <input
+            style={sm.input}
+            placeholder="해결방안 제목을 입력하세요"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+        </div>
+
+        <div style={sm.fieldWrap}>
+          <label style={sm.label}>해결책 <span style={{ color: "#EF4444" }}>*</span></label>
+          <textarea
+            style={sm.textarea}
+            placeholder="해결 방법을 상세히 입력하세요"
+            value={solution}
+            onChange={e => setSolution(e.target.value)}
+            rows={6}
+          />
+        </div>
+
+        <div style={sm.footer}>
+          <button style={sm.cancelBtn} onClick={onClose} disabled={loading}>취소</button>
+          <button style={sm.saveBtn} onClick={handleSave} disabled={loading}>
+            {loading ? "저장 중..." : existing ? "수정 저장" : "저장"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1988,8 +2118,9 @@ const ap = {
   td: { padding: "11px 14px", fontSize: "13px", color: "#475569", verticalAlign: "middle" },
   loadingRow:  { padding: "40px", textAlign: "center", fontSize: "13px", color: "#94A3B8" },
   emptyRow:    { padding: "40px", textAlign: "center", fontSize: "13px", color: "#94A3B8" },
-  badgeOk:     { fontSize: "10px", fontWeight: "600", color: "#10B981", backgroundColor: "#10B98112", border: "1px solid #10B98130", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
-  badgePending:{ fontSize: "10px", fontWeight: "600", color: "#F59E0B", backgroundColor: "#F59E0B12", border: "1px solid #F59E0B30", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  badgeOk:      { fontSize: "10px", fontWeight: "600", color: "#10B981", backgroundColor: "#10B98112", border: "1px solid #10B98130", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  badgePending: { fontSize: "10px", fontWeight: "600", color: "#F59E0B", backgroundColor: "#F59E0B12", border: "1px solid #F59E0B30", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
+  badgeSolution:{ fontSize: "10px", fontWeight: "600", color: "#7C3AED", backgroundColor: "#7C3AED12", border: "1px solid #7C3AED40", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap", cursor: "pointer" },
   statusBadge: { fontSize: "10px", fontWeight: "600", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
   statusColors: {
     TODO:     { color: "#64748B", backgroundColor: "#F1F5F9",   border: "1px solid #CBD5E1" },
@@ -1998,3 +2129,24 @@ const ap = {
     COMPLETE: { color: "#16A34A", backgroundColor: "#F0FDF4",   border: "1px solid #BBF7D0" },
   },
 };
+
+/* ═══════════════════════ 이슈 해결방안 모달 스타일 ═══════════════════════ */
+const sm = {
+  overlay:   { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", boxSizing: "border-box" },
+  modal:     { backgroundColor: "#FFFFFF", borderRadius: "12px", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", width: "100%", maxWidth: "560px", display: "flex", flexDirection: "column", gap: "16px", padding: "24px", boxSizing: "border-box", fontFamily: "'Pretendard', sans-serif" },
+  header:    { display: "flex", justifyContent: "space-between", alignItems: "flex-start" },
+  title:     { fontSize: "17px", fontWeight: "700", color: "#1E293B", margin: "0 0 4px" },
+  sub:       { fontSize: "12px", color: "#64748B", margin: 0, maxWidth: "420px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  closeBtn:  { fontFamily: "'Pretendard', sans-serif", fontSize: "16px", color: "#94A3B8", backgroundColor: "transparent", border: "none", cursor: "pointer", padding: "0 4px", lineHeight: 1 },
+  issueBox:  { backgroundColor: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "8px", padding: "12px 14px" },
+  issueLabel:{ fontSize: "10px", fontWeight: "700", color: "#EA580C", display: "block", marginBottom: "4px", letterSpacing: "0.05em" },
+  issueText: { fontSize: "13px", color: "#78350F", margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" },
+  fieldWrap: { display: "flex", flexDirection: "column", gap: "6px" },
+  label:     { fontSize: "12px", fontWeight: "600", color: "#475569" },
+  input:     { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "7px", padding: "9px 12px", outline: "none", width: "100%", boxSizing: "border-box" },
+  textarea:  { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#1E293B", border: "1px solid #D9D9D9", borderRadius: "7px", padding: "9px 12px", outline: "none", width: "100%", boxSizing: "border-box", resize: "vertical", lineHeight: 1.7 },
+  footer:    { display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "4px" },
+  cancelBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#64748B", backgroundColor: "#F1F5F9", border: "1px solid #E2E8F0", borderRadius: "7px", padding: "9px 20px", cursor: "pointer" },
+  saveBtn:   { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#7C3AED", border: "none", borderRadius: "7px", padding: "9px 24px", cursor: "pointer" },
+};
+
