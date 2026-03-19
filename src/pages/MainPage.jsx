@@ -354,8 +354,8 @@ function MainPage() {
     { id: "weekly-board",     label: t("nav.menus.weeklyTaskBoard"),       emoji: "▤" },
     { id: "ai-report",        label: t("nav.menus.aiWeeklyReport"),        emoji: "◉" },
     { id: "user-mgmt",        label: t("nav.menus.userManagement"),        emoji: "◎", adminOnly: true },
-    { id: "system-notice",    label: "시스템공지",                          emoji: "📢", noticeAdminOnly: true },
-    { id: "help-bradley",     label: "HELP BRADLEY!",                      emoji: "🙋" },
+    { id: "system-notice",    label: "시스템공지",                          emoji: "◈", noticeAdminOnly: true },
+    { id: "help-bradley",     label: "HELP BRADLEY!",                      emoji: "◇" },
   ];
 
   function handleLogout() {
