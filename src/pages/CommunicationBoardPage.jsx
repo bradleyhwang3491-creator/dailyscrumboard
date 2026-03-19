@@ -1680,13 +1680,15 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
   };
   const getTodayStr = () => new Date().toISOString().split("T")[0];
 
-  const [items,        setItems]       = useState([]);
-  const [loading,      setLoading]     = useState(false);
-  const [searchReg,    setSearchReg]   = useState("");
-  const [searchTitle,  setSearchTitle] = useState("");
-  const [searchIssue,  setSearchIssue] = useState("");
-  const [dateFrom,     setDateFrom]    = useState(getOneMonthAgo);
-  const [dateTo,       setDateTo]      = useState(getTodayStr);
+  const [items,         setItems]        = useState([]);
+  const [loading,       setLoading]      = useState(false);
+  const [searchReg,     setSearchReg]    = useState("");
+  const [searchTitle,   setSearchTitle]  = useState("");
+  const [searchIssue,   setSearchIssue]  = useState("");
+  const [searchSolTitle,setSearchSolTitle] = useState("");
+  const [searchSolText, setSearchSolText]  = useState("");
+  const [dateFrom,      setDateFrom]     = useState(getOneMonthAgo);
+  const [dateTo,        setDateTo]       = useState(getTodayStr);
   const [selectedTask, setSelectedTask] = useState(null);
   const [selectedRowId, setSelectedRowId] = useState(null);
   const [solutionMap,  setSolutionMap]  = useState({});
@@ -1701,11 +1703,26 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
     if (!dept) return;
     setLoading(true);
 
-    const reg   = "searchReg"   in overrides ? overrides.searchReg   : searchReg;
-    const title = "searchTitle" in overrides ? overrides.searchTitle : searchTitle;
-    const issue = "searchIssue" in overrides ? overrides.searchIssue : searchIssue;
-    const from  = "dateFrom"    in overrides ? overrides.dateFrom    : dateFrom;
-    const to    = "dateTo"      in overrides ? overrides.dateTo      : dateTo;
+    const reg      = "searchReg"      in overrides ? overrides.searchReg      : searchReg;
+    const title    = "searchTitle"    in overrides ? overrides.searchTitle    : searchTitle;
+    const issue    = "searchIssue"    in overrides ? overrides.searchIssue    : searchIssue;
+    const solTitle = "searchSolTitle" in overrides ? overrides.searchSolTitle : searchSolTitle;
+    const solText  = "searchSolText"  in overrides ? overrides.searchSolText  : searchSolText;
+    const from     = "dateFrom"       in overrides ? overrides.dateFrom       : dateFrom;
+    const to       = "dateTo"         in overrides ? overrides.dateTo         : dateTo;
+
+    // 이슈제목/해결책 조회조건이 있으면 TASK_BOARD_ISSUE_SOLUTION 먼저 조회
+    let solFilterBoardIds = null;
+    if (solTitle.trim() || solText.trim()) {
+      let solQuery = supabase.from("TASK_BOARD_ISSUE_SOLUTION").select("TASK_BOARD_ID");
+      if (solTitle.trim()) solQuery = solQuery.ilike("ISSUE_TITLE",   `%${solTitle.trim()}%`);
+      if (solText.trim())  solQuery = solQuery.ilike("SOLUTION_TEXT", `%${solText.trim()}%`);
+      const { data: solRows } = await solQuery;
+      solFilterBoardIds = (solRows ?? []).map(r => r.TASK_BOARD_ID);
+      if (solFilterBoardIds.length === 0) {
+        setItems([]); setSolutionMap({}); setLoading(false); return;
+      }
+    }
 
     let query = supabase
       .from("TASK_BOARD")
@@ -1715,32 +1732,20 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
       .neq("ISSUE", "")
       .order("INSERT_DATE", { ascending: false });
 
+    if (solFilterBoardIds) query = query.in("BOARD_ID", solFilterBoardIds);
+
     if (reg.trim()) {
       const matchingIds = Object.entries(userMap)
         .filter(([, name]) => name.includes(reg.trim()))
         .map(([id]) => id);
-      if (matchingIds.length === 0) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
+      if (matchingIds.length === 0) { setItems([]); setSolutionMap({}); setLoading(false); return; }
       query = query.in("ID", matchingIds);
     }
 
-    if (title.trim()) {
-      query = query.ilike("TITLE", `%${title.trim()}%`);
-    }
-
-    if (issue.trim()) {
-      query = query.ilike("ISSUE", `%${issue.trim()}%`);
-    }
-
-    if (from) {
-      query = query.gte("INSERT_DATE", from.replace(/-/g, ""));
-    }
-    if (to) {
-      query = query.lte("INSERT_DATE", to.replace(/-/g, ""));
-    }
+    if (title.trim()) query = query.ilike("TITLE", `%${title.trim()}%`);
+    if (issue.trim()) query = query.ilike("ISSUE", `%${issue.trim()}%`);
+    if (from) query = query.gte("INSERT_DATE", from.replace(/-/g, ""));
+    if (to)   query = query.lte("INSERT_DATE", to.replace(/-/g, ""));
 
     const { data } = await query;
     const mapped = (data ?? []).map(mapTaskBoardRow);
@@ -1766,9 +1771,9 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
   function handleReset() {
     const from = getOneMonthAgo();
     const to   = getTodayStr();
-    setSearchReg(""); setSearchTitle(""); setSearchIssue("");
+    setSearchReg(""); setSearchTitle(""); setSearchIssue(""); setSearchSolTitle(""); setSearchSolText("");
     setDateFrom(from); setDateTo(to);
-    fetchItems({ searchReg: "", searchTitle: "", searchIssue: "", dateFrom: from, dateTo: to });
+    fetchItems({ searchReg: "", searchTitle: "", searchIssue: "", searchSolTitle: "", searchSolText: "", dateFrom: from, dateTo: to });
   }
 
   return (
@@ -1811,6 +1816,16 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
               onChange={e => setSearchIssue(e.target.value)} />
           </div>
           <div style={ap.searchField}>
+            <label style={ap.searchLabel}>이슈제목</label>
+            <input style={ap.searchInput} placeholder="해결방안 제목 검색" value={searchSolTitle}
+              onChange={e => setSearchSolTitle(e.target.value)} />
+          </div>
+          <div style={ap.searchField}>
+            <label style={ap.searchLabel}>해결책</label>
+            <input style={ap.searchInput} placeholder="해결책 내용 검색" value={searchSolText}
+              onChange={e => setSearchSolText(e.target.value)} />
+          </div>
+          <div style={ap.searchField}>
             <label style={ap.searchLabel}>등록일자</label>
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
               <input type="date" style={{ ...ap.searchInput, width: "130px", cursor: "pointer" }}
@@ -1841,6 +1856,7 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                   <th style={ap.th}>이슈사항</th>
                   <th style={{ ...ap.th, width: "90px" }}>이슈해결여부</th>
                   <th style={{ ...ap.th, width: "110px" }}>해결방안</th>
+                  <th style={{ ...ap.th, width: "180px" }}>이슈제목(해결방안)</th>
                 </tr>
               </thead>
               <tbody>
@@ -1887,6 +1903,11 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                       ) : (
                         <span style={{ color: "#CBD5E1", fontSize: "11px" }}>-</span>
                       )}
+                    </td>
+                    <td style={{ ...ap.td, color: "#7C3AED", maxWidth: "180px" }}>
+                      {solutionMap[item.id]?.ISSUE_TITLE
+                        ? <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{solutionMap[item.id].ISSUE_TITLE}</div>
+                        : <span style={{ color: "#CBD5E1", fontSize: "11px" }}>-</span>}
                     </td>
                   </tr>
                 ))}
