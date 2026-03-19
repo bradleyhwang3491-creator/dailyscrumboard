@@ -1848,11 +1848,20 @@ function IssueAllPage({ user, userMap, tm1, tm2, tm3, tm4, deptUsers, onClose })
                   <tr
                     key={item.id}
                     style={{ ...ap.tr, backgroundColor: selectedRowId === item.id ? "#EFF6FF" : undefined }}
-                    onClick={() => { setSelectedRowId(item.id); setSelectedTask(item); }}
+                    onClick={() => setSelectedRowId(item.id)}
                   >
                     <td style={{ ...ap.td, textAlign: "center", color: "#94A3B8" }}>{idx + 1}</td>
                     <td style={{ ...ap.td, fontWeight: "600" }}>{userMap[item.registrantId] ?? item.registrantId}</td>
-                    <td style={{ ...ap.td, fontWeight: "600", color: "#1E293B" }}>{item.title}</td>
+                    <td style={{ ...ap.td }}>
+                      <span
+                        style={ap.titleLink}
+                        onClick={(e) => { e.stopPropagation(); setSelectedRowId(item.id); setSelectedTask(item); }}
+                        title="클릭하면 상세 내용을 볼 수 있습니다"
+                      >
+                        {item.title}
+                        <span style={ap.titleLinkIcon}>↗</span>
+                      </span>
+                    </td>
                     <td style={{ ...ap.td, color: "#94A3B8", fontSize: "11px" }}>{formatDate8(item.rawInsert)}</td>
                     <td style={{ ...ap.td, textAlign: "center" }}>
                       <span style={{ ...ap.statusBadge, ...ap.statusColors[item.status] }}>
@@ -2121,6 +2130,8 @@ const ap = {
   badgeOk:      { fontSize: "10px", fontWeight: "600", color: "#10B981", backgroundColor: "#10B98112", border: "1px solid #10B98130", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
   badgePending: { fontSize: "10px", fontWeight: "600", color: "#F59E0B", backgroundColor: "#F59E0B12", border: "1px solid #F59E0B30", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
   badgeSolution:{ fontSize: "10px", fontWeight: "600", color: "#7C3AED", backgroundColor: "#7C3AED12", border: "1px solid #7C3AED40", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap", cursor: "pointer" },
+  titleLink:    { fontWeight: "600", color: "#2563EB", cursor: "pointer", textDecoration: "underline", textDecorationColor: "#93C5FD", textUnderlineOffset: "3px", display: "inline-flex", alignItems: "center", gap: "3px" },
+  titleLinkIcon:{ fontSize: "10px", color: "#93C5FD", flexShrink: 0 },
   statusBadge: { fontSize: "10px", fontWeight: "600", borderRadius: "4px", padding: "2px 7px", whiteSpace: "nowrap" },
   statusColors: {
     TODO:     { color: "#64748B", backgroundColor: "#F1F5F9",   border: "1px solid #CBD5E1" },
