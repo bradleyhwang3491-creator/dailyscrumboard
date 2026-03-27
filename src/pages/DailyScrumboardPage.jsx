@@ -16,6 +16,7 @@ const PRIORITY_STYLES = {
 
 const INIT_FORM = {
   title: "",
+  registrantId: "",
   regDate: new Date().toISOString().split("T")[0],
   taskType1Cd: "",
   taskType2Cd: "",
@@ -215,10 +216,9 @@ function DailyScrumboardPage() {
     if (!regForm.title.trim()) { setRegErrors({ title: t("daily.modal.errTitle") }); return; }
     setRegLoading(true);
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const { data: insertedData, error } = await supabase.from("TASK_BOARD").insert({
-      TITLE:            regForm.title.trim(),
+    const registrantId = regForm.registrantId || user?.id || "";
+    const baseRow = {
       INSERT_DATE:      today,
-      ID:               user?.id   ?? "",
       DEPT_CD:          user?.deptCd ?? null,
       TASK_GUBUN1:      regForm.taskType1Cd || null,
       TASK_GUBUN2:      regForm.taskType2Cd || null,
@@ -233,17 +233,43 @@ function DailyScrumboardPage() {
       STATUS:           regForm.status,
       IMPORTANT_GUBUN:  regForm.priority,
       PAGE_URL:         regForm.relatedLink,
+    };
+
+    // 주 등록자 행 insert
+    const { data: insertedData, error } = await supabase.from("TASK_BOARD").insert({
+      ...baseRow,
+      TITLE: regForm.title.trim(),
+      ID:    registrantId,
     }).select("BOARD_ID");
-    setRegLoading(false);
-    if (error) { setRegErrors({ submit: "등록 오류: " + error.message }); return; }
-    // 협업 동료 저장
+    if (error) { setRegLoading(false); setRegErrors({ submit: "등록 오류: " + error.message }); return; }
+
     const newBoardId = insertedData?.[0]?.BOARD_ID;
     if (newBoardId && regForm.coworkerIds?.length > 0) {
       await supabase.from("TASK_BOARD_COWORKER").insert(
         regForm.coworkerIds.map((id, idx) => ({ BOARD_ID: newBoardId, SEQ_NO: idx + 1, COWORKER_ID: id }))
       );
     }
-    setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({});
+
+    // 협업 동료별 별도 행 insert (제목에 [등록자 : 이름] 추가)
+    if (regForm.coworkerIds?.length > 0) {
+      const registrantName = userMap[registrantId] ?? registrantId;
+      const coworkerRows = regForm.coworkerIds.map((cwId) => ({
+        ...baseRow,
+        TITLE: `${regForm.title.trim()} [등록자 : ${registrantName}]`,
+        ID:    cwId,
+      }));
+      const { data: cwInserted } = await supabase.from("TASK_BOARD").insert(coworkerRows).select("BOARD_ID");
+      // 각 협업 동료 행에도 TASK_BOARD_COWORKER 연결
+      if (cwInserted?.length > 0) {
+        const cwCoworkerRows = cwInserted.flatMap((row) =>
+          regForm.coworkerIds.map((id, idx) => ({ BOARD_ID: row.BOARD_ID, SEQ_NO: idx + 1, COWORKER_ID: id }))
+        );
+        await supabase.from("TASK_BOARD_COWORKER").insert(cwCoworkerRows);
+      }
+    }
+
+    setRegLoading(false);
+    setIsRegOpen(false); setRegForm({ ...INIT_FORM, registrantId: user?.id ?? "" }); setRegErrors({});
     fetchTasks();
   }
 
@@ -273,6 +299,7 @@ function DailyScrumboardPage() {
     setEditLoading(true);
     const { error } = await supabase.from("TASK_BOARD").update({
       TITLE:           editForm.title.trim(),
+      ID:              editForm.registrantId || user?.id || "",
       TASK_GUBUN1:     editForm.taskType1Cd || null,
       TASK_GUBUN2:     editForm.taskType2Cd || null,
       TASK_GUBUN3:     editForm.taskType3Cd || null,
@@ -528,7 +555,7 @@ function DailyScrumboardPage() {
         <h2 style={s.pageTitle}>Daily Scrumboard</h2>
         <div style={{ display: "flex", gap: "8px" }}>
           <button style={s.tm1ListBtn} onClick={() => setShowTm1Modal(true)}>{t("daily.tm1ListBtn")}</button>
-          <button style={s.registerBtn} onClick={() => setIsRegOpen(true)}>{t("daily.addBtn")}</button>
+          <button style={s.registerBtn} onClick={() => { setRegForm({ ...INIT_FORM, registrantId: user?.id ?? "" }); setIsRegOpen(true); }}>{t("daily.addBtn")}</button>
         </div>
       </div>
 
@@ -690,9 +717,10 @@ function DailyScrumboardPage() {
           tm1={tm1} tm2={tm2} tm3={tm3} tm4={tm4} readOnly={false}
           submitLabel={regLoading ? t("common.registering") : t("common.register")} submitDisabled={regLoading}
           onSubmit={handleRegister}
-          onClose={() => { setIsRegOpen(false); setRegForm(INIT_FORM); setRegErrors({}); }}
+          onClose={() => { setIsRegOpen(false); setRegForm({ ...INIT_FORM, registrantId: user?.id ?? "" }); setRegErrors({}); }}
           onAddTaskMaster={handleAddTaskMaster}
           onDeleteTaskMaster={handleDeleteTaskMaster}
+          showRegistrantSelect={true}
           deptUsers={deptUsers} />
       )}
 
@@ -712,6 +740,7 @@ function DailyScrumboardPage() {
           onDeleteTaskMaster={handleDeleteTaskMaster}
           onDelete={!isEditing ? handleDelete : null}
           onCopyRegister={!isEditing ? handleCopyRegister : null}
+          showRegistrantSelect={true}
           deptUsers={deptUsers} />
       )}
 
@@ -1173,7 +1202,8 @@ const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", C
 
 function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel,
-                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, onCopyRegister, deptUsers = [] }) {
+                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, onCopyRegister,
+                     showRegistrantSelect = false, deptUsers = [] }) {
   const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
@@ -1376,6 +1406,22 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
           <button style={ms.closeX} onClick={onClose}>✕</button>
         </div>
         <div style={ms.body}>
+          {/* 등록자 선택 (등록 팝업에서만 표시) */}
+          {showRegistrantSelect && (
+            <div style={ms.fullRow}>
+              <label style={ms.label}>등록자 <span style={ms.req}>*</span></label>
+              <select
+                style={{ ...ms.input, ...(readOnly ? ms.inputRO : {}) }}
+                value={form.registrantId}
+                disabled={readOnly}
+                onChange={(e) => f("registrantId", e.target.value)}
+              >
+                {deptUsers.map((u) => (
+                  <option key={u.ID} value={u.ID}>{u.NAME} ({u.ID})</option>
+                ))}
+              </select>
+            </div>
+          )}
           {/* 제목 */}
           <div style={ms.fullRow}>
             <label style={ms.label}>제목 <span style={ms.req}>*</span></label>
