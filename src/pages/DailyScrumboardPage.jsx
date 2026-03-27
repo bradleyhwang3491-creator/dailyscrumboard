@@ -335,6 +335,41 @@ function DailyScrumboardPage() {
     fetchTasks();
   }
 
+  /* ── 복사등록 ── */
+  async function handleCopyRegister() {
+    if (!detailTask) return;
+    if (!window.confirm("이 업무를 복사하여 새로 등록하시겠습니까?")) return;
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const { data: insertedData, error } = await supabase.from("TASK_BOARD").insert({
+      TITLE:            "[복사등록] " + detailTask.title,
+      INSERT_DATE:      today,
+      ID:               user?.id   ?? "",
+      DEPT_CD:          user?.deptCd ?? null,
+      TASK_GUBUN1:      detailTask.taskType1Cd || null,
+      TASK_GUBUN2:      detailTask.taskType2Cd || null,
+      TASK_GUBUN3:      detailTask.taskType3Cd || null,
+      TASK_GUBUN4:      detailTask.taskType4Cd || null,
+      TASK_CONTENT:     detailTask.content,
+      LEADER_KNOW:      detailTask.teamNote,
+      ISSUE:            detailTask.issue,
+      ISSUE_COMPLETE_YN: "N",
+      DUE_EXPECT_DATE:  toDate8(detailTask.plannedEnd) || null,
+      COMPLETE_DATE:    null,
+      STATUS:           "TODO",
+      IMPORTANT_GUBUN:  detailTask.priority,
+      PAGE_URL:         detailTask.relatedLink,
+    }).select("BOARD_ID");
+    if (error) { alert("복사등록 오류: " + error.message); return; }
+    const newBoardId = insertedData?.[0]?.BOARD_ID;
+    if (newBoardId && detailTask.coworkerIds?.length > 0) {
+      await supabase.from("TASK_BOARD_COWORKER").insert(
+        detailTask.coworkerIds.map((id, idx) => ({ BOARD_ID: newBoardId, SEQ_NO: idx + 1, COWORKER_ID: id }))
+      );
+    }
+    closeDetail();
+    fetchTasks();
+  }
+
   function closeDetail()  { setDetailTask(null); setEditForm(null); setIsEditing(false); }
   function cancelEdit()   { setEditForm({ ...detailTask }); setIsEditing(false); }
 
@@ -676,6 +711,7 @@ function DailyScrumboardPage() {
           onAddTaskMaster={handleAddTaskMaster}
           onDeleteTaskMaster={handleDeleteTaskMaster}
           onDelete={!isEditing ? handleDelete : null}
+          onCopyRegister={!isEditing ? handleCopyRegister : null}
           deptUsers={deptUsers} />
       )}
 
@@ -1137,7 +1173,7 @@ const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", C
 
 function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel,
-                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, deptUsers = [] }) {
+                     onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, onCopyRegister, deptUsers = [] }) {
   const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
@@ -1558,6 +1594,9 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
             {readOnly && onDelete && (
               <button style={ms.deleteBtn} onClick={onDelete}>🗑 삭제</button>
             )}
+            {readOnly && onCopyRegister && (
+              <button style={ms.copyRegBtn} onClick={onCopyRegister}>📋 복사등록</button>
+            )}
           </div>
           <div style={ms.footerRight}>
             <button style={ms.cancelBtn} onClick={onClose}>{resolvedCloseLabel}</button>
@@ -1757,6 +1796,7 @@ const ms = {
   cancelBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", color: "#5A5A5A", backgroundColor: "#FFFFFF", border: "1px solid #D9D9D9", borderRadius: "5px", padding: "8px 20px", cursor: "pointer" },
   submitBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#FFFFFF", backgroundColor: "#3A3A3A", border: "none", borderRadius: "5px", padding: "8px 20px", cursor: "pointer" },
   deleteBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#FFFFFF", backgroundColor: "#DC2626", border: "none", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
+  copyRegBtn: { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "500", color: "#FFFFFF", backgroundColor: "#2563EB", border: "none", borderRadius: "5px", padding: "8px 16px", cursor: "pointer" },
   // 이슈해결여부 (모달)
   issueStatusRow:     { display: "flex", alignItems: "center", gap: "8px", marginTop: "8px", padding: "8px 12px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0" },
   issueStatusLabel:   { fontSize: "12px", fontWeight: "500", color: "#64748B", flexShrink: 0 },
