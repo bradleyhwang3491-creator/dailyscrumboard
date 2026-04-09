@@ -5,7 +5,8 @@
  */
 import { supabase } from "../lib/supabase";
 
-const SESSION_KEY = "scrumboard_session";
+const SESSION_KEY      = "scrumboard_session";
+const LAST_ACTIVITY_KEY = "scrumboard_last_activity";
 
 /**
  * 아이디/비밀번호로 로그인합니다.
@@ -50,6 +51,7 @@ export async function login(id, password) {
   };
 
   localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+  localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
   return { success: true, user: sessionUser };
 }
 
@@ -73,4 +75,16 @@ export function getSessionUser() {
  */
 export function logout() {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
+}
+
+/** 마지막 활동 시각을 현재로 갱신합니다. */
+export function updateLastActivity() {
+  localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+}
+
+/** 마지막 활동 시각(ms)을 반환합니다. */
+export function getLastActivity() {
+  const raw = localStorage.getItem(LAST_ACTIVITY_KEY);
+  return raw ? parseInt(raw, 10) : null;
 }

@@ -69,6 +69,7 @@ function DailyScrumboardPage() {
   // 조회 조건
   const [searchType1,        setSearchType1]        = useState("");
   const [searchUserId,       setSearchUserId]        = useState("");
+  const [searchPriority,     setSearchPriority]      = useState("");
   const [searchOverdue,      setSearchOverdue]       = useState(false);
   const [searchCompleteFrom, setSearchCompleteFrom]  = useState(getTwoWeeksAgo);
   const [searchCompleteTo,   setSearchCompleteTo]    = useState(getToday);
@@ -79,6 +80,10 @@ function DailyScrumboardPage() {
   // 드래그 상태
   const [dragCardId,  setDragCardId]  = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+
+  // 완료일자 입력 팝업 (드래그 앤 드롭)
+  const [completeDateModal, setCompleteDateModal] = useState(null); // { cardId, targetColId }
+  const [completeDateInput, setCompleteDateInput] = useState("");
 
   // 업무구분1 관리 모달
   const [showTm1Modal, setShowTm1Modal] = useState(false);
@@ -205,8 +210,9 @@ function DailyScrumboardPage() {
   /** 조회 조건 적용 */
   const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
   const filteredTasks = tasks.filter((t) => {
-    if (searchType1  && t.taskType1Cd !== searchType1)  return false;
-    if (searchUserId && t.registrantId !== searchUserId) return false;
+    if (searchType1    && t.taskType1Cd !== searchType1)  return false;
+    if (searchUserId   && t.registrantId !== searchUserId) return false;
+    if (searchPriority && t.priority !== searchPriority)   return false;
     if (searchOverdue && !(t.plannedEnd && t.plannedEnd < today && t.status !== "COMPLETE")) return false;
     return true;
   });
@@ -520,7 +526,8 @@ function DailyScrumboardPage() {
 
     // 완료 처리 시 작업완료일자 필수 체크
     if (colId === "COMPLETE" && !card.actualEnd) {
-      alert("⚠️ 완료 처리를 하려면 작업완료일자를 먼저 입력해 주세요.\n\n업무 카드를 클릭하여 수정 화면에서 작업완료일자를 입력한 후 다시 시도해 주세요.");
+      setCompleteDateInput(new Date().toISOString().split("T")[0]); // 오늘 날짜 기본값
+      setCompleteDateModal({ cardId: dragCardId, targetColId: colId });
       setDragCardId(null);
       return;
     }
@@ -543,6 +550,27 @@ function DailyScrumboardPage() {
     }
   }
 
+  async function handleCompleteDateConfirm() {
+    if (!completeDateInput) return;
+    const { cardId, targetColId } = completeDateModal;
+    const date8 = completeDateInput.replace(/-/g, "");
+
+    setTasks((prev) =>
+      prev.map((t) => t.id === cardId ? { ...t, status: targetColId, actualEnd: completeDateInput } : t)
+    );
+    setCompleteDateModal(null);
+
+    const { error } = await supabase
+      .from("TASK_BOARD")
+      .update({ STATUS: targetColId, COMPLETE_DATE: date8 })
+      .eq("BOARD_ID", cardId);
+
+    if (error) {
+      console.error("완료 처리 오류:", error.message);
+      fetchTasks();
+    }
+  }
+
   function handleDragEnd() {
     setDragCardId(null);
     setDragOverCol(null);
@@ -550,6 +578,41 @@ function DailyScrumboardPage() {
 
   return (
     <div style={s.wrap}>
+
+      {/* 완료일자 입력 팝업 (드래그 앤 드롭) */}
+      {completeDateModal && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: "14px", padding: "32px 28px", width: "340px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "22px" }}>✅</span>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#1E293B" }}>작업완료일자 입력</h3>
+            </div>
+            <p style={{ margin: 0, fontSize: "13px", color: "#64748B", lineHeight: "1.6" }}>
+              완료 처리를 위해 <strong>작업완료일자</strong>를 입력해 주세요.<br />
+              입력 후 확인 버튼을 누르면 완료 상태로 변경됩니다.
+            </p>
+            <input
+              type="date"
+              value={completeDateInput}
+              onChange={(e) => setCompleteDateInput(e.target.value)}
+              style={{ padding: "9px 12px", border: "1px solid #CBD5E1", borderRadius: "8px", fontSize: "14px", color: "#1E293B", outline: "none", width: "100%", boxSizing: "border-box" }}
+              autoFocus
+            />
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setCompleteDateModal(null); setCompleteDateInput(""); }}
+                style={{ padding: "8px 18px", border: "1px solid #E2E8F0", borderRadius: "8px", backgroundColor: "#F8FAFC", color: "#64748B", fontSize: "13px", cursor: "pointer", fontWeight: "500" }}
+              >취소</button>
+              <button
+                onClick={handleCompleteDateConfirm}
+                disabled={!completeDateInput}
+                style={{ padding: "8px 18px", border: "none", borderRadius: "8px", backgroundColor: completeDateInput ? "#16A34A" : "#CBD5E1", color: "#fff", fontSize: "13px", cursor: completeDateInput ? "pointer" : "not-allowed", fontWeight: "600" }}
+              >확인</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 */}
       <div style={s.topBar}>
         <h2 style={s.pageTitle}>Daily Scrumboard</h2>
@@ -576,6 +639,16 @@ function DailyScrumboardPage() {
           </select>
         </div>
         <div style={isMobile ? s.searchFieldMobile : s.searchField}>
+          <label style={s.searchLabel}>중요도</label>
+          <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchPriority} onChange={(e) => setSearchPriority(e.target.value)}>
+            <option value="">전체</option>
+            <option value="긴급">긴급</option>
+            <option value="상">상</option>
+            <option value="중">중</option>
+            <option value="하">하</option>
+          </select>
+        </div>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={{ ...s.searchLabel, display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", userSelect: "none" }}>
             <input
               type="checkbox"
@@ -588,7 +661,7 @@ function DailyScrumboardPage() {
         </div>
         <button style={isMobile ? s.searchBtnFull : s.searchBtn} onClick={() => fetchTasks()}>조회</button>
         <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => {
-          setSearchType1(""); setSearchUserId(""); setSearchOverdue(false);
+          setSearchType1(""); setSearchUserId(""); setSearchPriority(""); setSearchOverdue(false);
           setSearchCompleteFrom(getTwoWeeksAgo()); setSearchCompleteTo(getToday());
           setTimeout(() => fetchTasks(), 0);
         }}>{t("common.reset")}</button>

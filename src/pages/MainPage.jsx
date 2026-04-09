@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import { logout } from "../utils/auth";
+import { logout, updateLastActivity, getLastActivity } from "../utils/auth";
 import { useBreakpoint } from "../hooks/useBreakpoint";
 import { supabase } from "../lib/supabase";
 import UserManagementPage from "./UserManagementPage";
@@ -341,6 +341,68 @@ function MainPage() {
   const [activeMenu,  setActiveMenu]  = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // 자동 로그아웃 메시지 표시
+  const [autoLogoutMsg, setAutoLogoutMsg] = useState(false);
+
+  // 어제 시스템 공지 알림 모달
+  const [yesterdayNotices,     setYesterdayNotices]     = useState([]);
+  const [showYesterdayNotice,  setShowYesterdayNotice]  = useState(false);
+
+  /* ── 한국시간(KST) 날짜 문자열 반환 ── */
+  function getKSTDate(offsetDays = 0) {
+    const now = new Date();
+    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    kst.setDate(kst.getDate() + offsetDays);
+    return kst.toISOString().split("T")[0]; // YYYY-MM-DD
+  }
+
+  /* ── 자동 로그아웃 (12시간 비활동) ── */
+  useEffect(() => {
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+    const EVENTS = ["mousedown", "keydown", "scroll", "touchstart"];
+
+    const onActivity = () => updateLastActivity();
+    EVENTS.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+
+    const timer = setInterval(() => {
+      const last = getLastActivity();
+      if (last && Date.now() - last > TWELVE_HOURS) {
+        clearInterval(timer);
+        setAutoLogoutMsg(true);
+      }
+    }, 60 * 1000); // 1분마다 체크
+
+    return () => {
+      EVENTS.forEach((ev) => window.removeEventListener(ev, onActivity));
+      clearInterval(timer);
+    };
+  }, []);
+
+  /* ── 어제 시스템 공지 알림 (하루 1회, KST 기준) ── */
+  useEffect(() => {
+    if (!user) return;
+    const todayKST = getKSTDate(0);
+    const checkKey = `notice_daily_check_${user.id}`;
+    const lastCheck = localStorage.getItem(checkKey);
+    if (lastCheck === todayKST) return; // 오늘 이미 확인함
+
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().replace("T", " ").slice(0, 19);
+    async function checkYesterdayNotices() {
+      const { data } = await supabase
+        .from("SYSTEM_UPDATE_NOTIFY")
+        .select("*")
+        .gte("REG_DATE", since24h)
+        .order("ID", { ascending: false });
+
+      localStorage.setItem(checkKey, todayKST);
+      if (data && data.length > 0) {
+        setYesterdayNotices(data);
+        setShowYesterdayNotice(true);
+      }
+    }
+    checkYesterdayNotices();
+  }, [user]);
+
   const deptNm = user?.deptNm ?? "";
   const name   = user?.name   ?? "";
 
@@ -419,6 +481,53 @@ function MainPage() {
 
   return (
     <div style={styles.page}>
+
+      {/* ── 자동 로그아웃 알림 ── */}
+      {autoLogoutMsg && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: "14px", padding: "36px 32px", width: "360px", boxShadow: "0 8px 32px rgba(0,0,0,0.2)", display: "flex", flexDirection: "column", gap: "18px", alignItems: "center", textAlign: "center" }}>
+            <span style={{ fontSize: "40px" }}>⏱️</span>
+            <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700", color: "#1E293B" }}>자동 로그아웃</h3>
+            <p style={{ margin: 0, fontSize: "14px", color: "#64748B", lineHeight: "1.7" }}>
+              12시간 이상 사용하지 않아<br />자동 로그아웃 됩니다.
+            </p>
+            <button
+              onClick={() => { logout(); setUser(null); navigate("/login", { replace: true }); }}
+              style={{ padding: "10px 32px", backgroundColor: "#1E293B", color: "#fff", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+            >확인</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 어제 시스템 공지 알림 ── */}
+      {showYesterdayNotice && yesterdayNotices.length > 0 && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ backgroundColor: "#fff", borderRadius: "14px", width: "90%", maxWidth: "520px", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #E8E8E8", backgroundColor: "#F8FAFC", display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "20px" }}>📢</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#1E293B" }}>어제 등록된 시스템 공지</h3>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}>총 {yesterdayNotices.length}건의 새 공지가 있습니다.</p>
+              </div>
+            </div>
+            <div style={{ overflowY: "auto", flex: 1, padding: "12px 0" }}>
+              {yesterdayNotices.map((item) => (
+                <div key={item.ID ?? item.id} style={{ padding: "14px 24px", borderBottom: "1px solid #F1F5F9" }}>
+                  <p style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "600", color: "#1E293B" }}>{item.TITLE ?? item.title}</p>
+                  <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#475569", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>{item.CONTENT ?? item.content}</p>
+                  <span style={{ fontSize: "11px", color: "#94A3B8" }}>{(item.REG_DATE ?? "").slice(0, 10)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding: "14px 24px", borderTop: "1px solid #E8E8E8", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setShowYesterdayNotice(false); setActiveMenu("dashboard"); }}
+                style={{ padding: "9px 24px", backgroundColor: "#1E293B", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}
+              >확인 (Communication Board로 이동)</button>
+            </div>
+          </div>
+        </div>
+      )}
       {isMobile && sidebarOpen && (
         <div style={styles.overlay} onClick={() => setSidebarOpen(false)} />
       )}
@@ -450,7 +559,7 @@ function MainPage() {
           <NotifyButton />
           {/* 언어 선택 드롭다운 */}
           <LangDropdown />
-          <button onClick={handleLogout} style={styles.logoutButton}>
+<button onClick={handleLogout} style={styles.logoutButton}>
             {t("common.logout")}
           </button>
         </div>
