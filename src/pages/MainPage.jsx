@@ -565,9 +565,9 @@ function MainPage() {
         <span>HELP BOARD</span>
       </button>
 
-      {/* 6. Admin 대메뉴 — 최하단 */}
+      {/* 6. Admin 대메뉴 — Help Board 하단 */}
       {user?.id === ADMIN_ID && (
-        <div style={{ borderTop: "1px solid #E8E8E8", marginTop: "auto", paddingTop: "8px" }}>
+        <div style={{ borderTop: "1px solid #E8E8E8", marginTop: "4px", paddingTop: "4px" }}>
           <button onClick={() => setAdminOpen(v => !v)} style={accordionHdrStyle}>
             <span style={{ display: "flex", alignItems: "center" }}>
               <span style={styles.menuEmoji}>◎</span>
