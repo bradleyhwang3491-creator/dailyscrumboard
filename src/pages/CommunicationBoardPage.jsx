@@ -1239,7 +1239,7 @@ function RequestModal({ user, onClose, onSuccess }) {
 
 /* ═══════════════════════ 페이지 스타일 ═══════════════════════ */
 const s = {
-  wrap:        { fontFamily: "'Pretendard', sans-serif", display: "flex", flexDirection: "column", height: "100%", minHeight: 0, gap: "16px" },
+  wrap:        { fontFamily: "'Pretendard', sans-serif", display: "flex", flexDirection: "column", height: "calc(100vh - 120px)", minHeight: 0, gap: "16px", overflow: "hidden" },
   topBar:      { display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", flexShrink: 0 },
   pageTitle:   { fontSize: "18px", fontWeight: "700", color: "#1E293B", margin: "0 0 3px 0" },
   pageDesc:    { fontSize: "12px", color: "#94A3B8", margin: 0, fontWeight: "400" },
@@ -1251,7 +1251,7 @@ const s = {
   totalCount:  { fontSize: "11px", color: "#1E293B", fontWeight: "700" },
   requestBtn:  { fontFamily: "'Pretendard', sans-serif", fontSize: "13px", fontWeight: "600", color: "#FFFFFF", backgroundColor: "#1E293B", border: "none", borderRadius: "7px", padding: "9px 18px", cursor: "pointer", whiteSpace: "nowrap" },
 
-  grid:        { flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: "14px", minHeight: 0 },
+  grid:        { flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: "14px", minHeight: 0, overflow: "hidden" },
   gridMobile:  { gridTemplateColumns: "1fr", gridTemplateRows: "auto", gap: "12px", minHeight: "unset" },
   card:        { backgroundColor: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: "10px", display: "flex", flexDirection: "column", overflow: "hidden", transition: "box-shadow 0.18s ease", minHeight: 0 },
   accentBar:   { height: "3px", flexShrink: 0 },
