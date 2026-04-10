@@ -21,6 +21,15 @@ input:focus {
   outline: none;
 }
 
+/* 로그인 폼 placeholder — 다크 회색 배경에 맞게 */
+.login-input::placeholder {
+  color: #888888;
+}
+.login-input:focus {
+  border-color: #888888 !important;
+  background-color: #525252 !important;
+}
+
 /* 버튼 hover 스타일 */
 button:hover {
   opacity: 0.88;

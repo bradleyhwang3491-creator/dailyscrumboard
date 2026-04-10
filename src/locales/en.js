@@ -35,7 +35,7 @@ export const en = {
   },
 
   login: {
-    title: "SCRUM MEETING, WORK TOGETHER",
+    title: "PLAN SMART. SCRUM FAST. DELIVER TOGETHER",
     idPlaceholder: "Enter your ID",
     pwPlaceholder: "Enter your password",
     idRequired: "Please enter your ID.",
@@ -45,7 +45,7 @@ export const en = {
   },
 
   nav: {
-    title: "SCRUM MEETING, WORK TOGETHER",
+    title: "PLAN SMART. SCRUM FAST. DELIVER TOGETHER",
     titleMobile: "SCRUM BOARD",
     menu: "Menu",
     closeMenu: "Close Menu",

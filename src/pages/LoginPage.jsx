@@ -30,7 +30,7 @@ function LoginPage() {
 const styles = {
   page: {
     minHeight: "100vh",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#2C2C2C",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -39,17 +39,19 @@ const styles = {
   card: {
     width: "100%",
     maxWidth: "400px",
-    backgroundColor: "#FFFFFF",
-    borderRadius: "10px",
-    boxShadow: "0 2px 16px rgba(0, 0, 0, 0.08)",
-    padding: "44px 40px 40px",
+    backgroundColor: "#3A3A3A",
+    borderRadius: "14px",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: "48px 40px 44px",
   },
   cardMobile: {
     width: "100%",
     maxWidth: "400px",
-    backgroundColor: "#FFFFFF",
-    borderRadius: "10px",
-    boxShadow: "0 2px 16px rgba(0, 0, 0, 0.08)",
+    backgroundColor: "#3A3A3A",
+    borderRadius: "14px",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.40)",
+    border: "1px solid rgba(255,255,255,0.08)",
     padding: "36px 24px 32px",
   },
 };

@@ -35,7 +35,7 @@ export const ko = {
   },
 
   login: {
-    title: "SCRUM MEETING, WORK TOGETHER",
+    title: "PLAN SMART. SCRUM FAST. DELIVER TOGETHER",
     idPlaceholder: "아이디를 입력하세요",
     pwPlaceholder: "비밀번호를 입력하세요",
     idRequired: "아이디를 입력해주세요.",
@@ -45,7 +45,7 @@ export const ko = {
   },
 
   nav: {
-    title: "SCRUM MEETING, WORK TOGETHER",
+    title: "PLAN SMART. SCRUM FAST. DELIVER TOGETHER",
     titleMobile: "SCRUM BOARD",
     menu: "메뉴",
     closeMenu: "메뉴 닫기",

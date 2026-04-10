@@ -35,11 +35,12 @@ function LoginForm({ onLoginSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} noValidate style={styles.form}>
-      <h1 style={styles.title}>{t("login.title").replace(",", ",\n")}</h1>
+      <h1 style={styles.title}>{t("login.title").replace(/\. /g, ".\n")}</h1>
 
       <div style={styles.fieldGroup}>
         <input
           type="text"
+          className="login-input"
           value={id}
           onChange={(e) => {
             setId(e.target.value);
@@ -60,6 +61,7 @@ function LoginForm({ onLoginSuccess }) {
       <div style={styles.fieldGroup}>
         <input
           type="password"
+          className="login-input"
           value={password}
           onChange={(e) => {
             setPassword(e.target.value);
@@ -96,7 +98,7 @@ const styles = {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "22px",
     fontWeight: "700",
-    color: "#2F2F2F",
+    color: "#F1F5F9",
     textAlign: "center",
     marginBottom: "32px",
     lineHeight: "1.5",
@@ -111,44 +113,44 @@ const styles = {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "15px",
     fontWeight: "400",
-    color: "#2F2F2F",
-    backgroundColor: "#FFFFFF",
+    color: "#F1F5F9",
+    backgroundColor: "#4A4A4A",
     borderWidth: "1px",
     borderStyle: "solid",
-    borderColor: "#D9D9D9",
-    borderRadius: "6px",
+    borderColor: "#5A5A5A",
+    borderRadius: "8px",
     padding: "12px 14px",
     outline: "none",
-    transition: "border-color 0.15s",
+    transition: "border-color 0.15s, background-color 0.15s",
   },
-  inputError:    { borderColor: "#D14343" },
-  inputDisabled: { backgroundColor: "#F5F5F5", cursor: "not-allowed" },
+  inputError:    { borderColor: "#F87171" },
+  inputDisabled: { backgroundColor: "#404040", cursor: "not-allowed", opacity: 0.6 },
   fieldErrorMsg: {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "13px",
-    color: "#D14343",
+    color: "#FCA5A5",
     marginTop: "5px",
     marginBottom: "0px",
   },
   authErrorMsg: {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "13px",
-    color: "#D14343",
+    color: "#FCA5A5",
     textAlign: "center",
     margin: "4px 0 12px",
   },
   button: {
     fontFamily: "'Pretendard', sans-serif",
     fontSize: "15px",
-    fontWeight: "500",
+    fontWeight: "600",
     color: "#FFFFFF",
-    backgroundColor: "#3A3A3A",
-    border: "none",
-    borderRadius: "6px",
+    backgroundColor: "#555555",
+    border: "1px solid #666666",
+    borderRadius: "8px",
     padding: "13px",
     marginTop: "8px",
     cursor: "pointer",
-    transition: "background-color 0.15s, opacity 0.15s",
+    transition: "opacity 0.15s",
   },
 };
 
