@@ -15,6 +15,8 @@ import CommunicationBoardPage from "./CommunicationBoardPage";
 import GanttChartPage from "./GanttChartPage";
 import SystemNoticePage from "./SystemNoticePage";
 import HelpBradleyPage from "./HelpBradleyPage";
+import IssueManagePage from "./IssueManagePage";
+import IssueDashboardPage from "./IssueDashboardPage";
 
 const ADMIN_ID = "SUNGHYUN_HWANG";
 const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
@@ -406,19 +408,21 @@ function MainPage() {
   const deptNm = user?.deptNm ?? "";
   const name   = user?.name   ?? "";
 
-  /* 메뉴 아이템 — label은 t()로 언어 반영 */
-  const MENU_ITEMS = [
-    { id: "dashboard",        label: t("nav.menus.communicationBoard"),    emoji: "◈" },
-    { id: "scrumboard",       label: t("nav.menus.dailyScrumboard"),       emoji: "▦" },
-    { id: "gantt",            label: t("nav.menus.ganttChart"),            emoji: "▬" },
-    { id: "yearly-board",     label: t("nav.menus.yearlyTaskBoard"),       emoji: "◻" },
-    { id: "yearly-board-crm", label: t("nav.menus.yearlyTaskBoardCRM"),   emoji: "◈", crmOnly: true },
-    { id: "weekly-board",     label: t("nav.menus.weeklyTaskBoard"),       emoji: "▤" },
-    { id: "ai-report",        label: t("nav.menus.aiWeeklyReport"),        emoji: "◉" },
-    { id: "user-mgmt",        label: t("nav.menus.userManagement"),        emoji: "◎", adminOnly: true },
-    { id: "system-notice",    label: "시스템공지",                          emoji: "◈", noticeAdminOnly: true },
-    { id: "help-bradley",     label: "HELP BRADLEY!",                      emoji: "◇" },
-  ];
+  /* 전체 메뉴 ID → 라벨 맵 (모바일 상단 표시용) */
+  const ALL_MENU_LABELS = {
+    "dashboard":        t("nav.menus.communicationBoard"),
+    "scrumboard":       t("nav.menus.dailyScrumboard"),
+    "gantt":            t("nav.menus.ganttChart"),
+    "yearly-board":     t("nav.menus.yearlyTaskBoard"),
+    "yearly-board-crm": t("nav.menus.yearlyTaskBoardCRM"),
+    "weekly-board":     t("nav.menus.weeklyTaskBoard"),
+    "ai-report":        t("nav.menus.aiWeeklyReport"),
+    "user-mgmt":        t("nav.menus.userManagement"),
+    "system-notice":    "System Notification",
+    "help-bradley":     "HELP BOARD",
+    "issue-manage":     "Issue Manage",
+    "issue-dashboard":  "Issue Dashboard",
+  };
 
   function handleLogout() {
     logout();
@@ -426,12 +430,46 @@ function MainPage() {
     navigate("/login", { replace: true });
   }
 
+  const [scrumboardOpen,    setScrumboardOpen]    = useState(false);
+  const [projectReportOpen, setProjectReportOpen] = useState(false);
+  const [adminOpen,         setAdminOpen]         = useState(false);
+
   function handleMenuClick(id) {
     setActiveMenu(id);
     setSidebarOpen(false);
   }
 
-  /* 사이드바 */
+  /* 사이드바 — 서브메뉴 버튼 헬퍼 */
+  const subBtn = (id, label) => (
+    <button
+      key={id}
+      onClick={() => handleMenuClick(id)}
+      style={{
+        ...styles.menuItem,
+        paddingLeft: "42px",
+        fontSize: "13px",
+        fontWeight: activeMenu === id ? "600" : "400",
+        color: activeMenu === id ? "#2563EB" : "#5A5A5A",
+        backgroundColor: activeMenu === id ? "#EFF6FF" : "transparent",
+      }}
+    >
+      {activeMenu === id && <span style={{ ...styles.activeBar, backgroundColor: "#2563EB" }} />}
+      <span style={{ marginRight: "8px", color: "#94A3B8" }}>└</span>
+      {label}
+    </button>
+  );
+
+  const accordionHdrStyle = {
+    ...styles.menuItem,
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    fontWeight: "600", color: "#2F2F2F",
+  };
+  const subWrap = {
+    backgroundColor: "#F8FAFC",
+    borderTop: "1px solid #F1F5F9",
+    borderBottom: "1px solid #F1F5F9",
+  };
+
   const sidebarEl = (
     <nav
       style={{
@@ -453,29 +491,99 @@ function MainPage() {
         </div>
       )}
 
-      {MENU_ITEMS.map((item) => {
-        if (item.crmOnly && !CRM_USER_IDS.includes(user?.id)) return null;
-        if (item.noticeAdminOnly && !NOTICE_ADMIN_IDS.includes(user?.id)) return null;
-        const disabled = item.adminOnly && user?.id !== ADMIN_ID;
-        return (
-          <button
-            key={item.id}
-            disabled={disabled}
-            onClick={() => !disabled && handleMenuClick(item.id)}
-            title={disabled ? t("nav.adminOnly") : undefined}
-            style={{
-              ...styles.menuItem,
-              ...(activeMenu === item.id ? styles.menuItemActive : {}),
-              ...(disabled ? styles.menuItemDisabled : {}),
-            }}
-          >
-            {activeMenu === item.id && !disabled && <span style={styles.activeBar} />}
-            <span style={{ ...styles.menuEmoji, ...(disabled ? { opacity: 0.4 } : {}) }}>{item.emoji}</span>
-            <span style={disabled ? { opacity: 0.4 } : {}}>{item.label}</span>
-            {disabled && <span style={styles.lockBadge}>🔒</span>}
+      {/* 1. Communication Board */}
+      <button
+        onClick={() => handleMenuClick("dashboard")}
+        style={{ ...styles.menuItem, ...(activeMenu === "dashboard" ? styles.menuItemActive : {}) }}
+      >
+        {activeMenu === "dashboard" && <span style={styles.activeBar} />}
+        <span style={styles.menuEmoji}>◈</span>
+        <span>{t("nav.menus.communicationBoard")}</span>
+      </button>
+
+      {/* 2. Scrumboard 대메뉴 */}
+      <div style={{ borderTop: "1px solid #E8E8E8", marginTop: "4px", paddingTop: "4px" }}>
+        <button onClick={() => setScrumboardOpen(v => !v)} style={accordionHdrStyle}>
+          <span style={{ display: "flex", alignItems: "center" }}>
+            <span style={styles.menuEmoji}>▦</span>
+            <span>Scrumboard</span>
+          </span>
+          <span style={{ fontSize: "10px", color: "#94A3B8", marginRight: "4px" }}>
+            {scrumboardOpen ? "▲" : "▼"}
+          </span>
+        </button>
+        {scrumboardOpen && (
+          <div style={subWrap}>
+            {subBtn("scrumboard",   t("nav.menus.dailyScrumboard"))}
+            {subBtn("gantt",        t("nav.menus.ganttChart"))}
+            {subBtn("weekly-board", t("nav.menus.weeklyTaskBoard"))}
+            {subBtn("yearly-board", t("nav.menus.yearlyTaskBoard"))}
+            {CRM_USER_IDS.includes(user?.id) && subBtn("yearly-board-crm", t("nav.menus.yearlyTaskBoardCRM"))}
+            {subBtn("ai-report",    t("nav.menus.aiWeeklyReport"))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Project Report 대메뉴 */}
+      <div style={{ borderTop: "1px solid #E8E8E8", marginTop: "4px", paddingTop: "4px" }}>
+        <button onClick={() => setProjectReportOpen(v => !v)} style={accordionHdrStyle}>
+          <span style={{ display: "flex", alignItems: "center" }}>
+            <span style={styles.menuEmoji}>◐</span>
+            <span>Project Report</span>
+          </span>
+          <span style={{ fontSize: "10px", color: "#94A3B8", marginRight: "4px" }}>
+            {projectReportOpen ? "▲" : "▼"}
+          </span>
+        </button>
+        {projectReportOpen && (
+          <div style={subWrap}>
+            {subBtn("issue-manage",    "Issue Manage")}
+            {subBtn("issue-dashboard", "Issue Dashboard")}
+          </div>
+        )}
+      </div>
+
+      {/* 4. System Notification */}
+      {NOTICE_ADMIN_IDS.includes(user?.id) && (
+        <button
+          onClick={() => handleMenuClick("system-notice")}
+          style={{ ...styles.menuItem, ...(activeMenu === "system-notice" ? styles.menuItemActive : {}) }}
+        >
+          {activeMenu === "system-notice" && <span style={styles.activeBar} />}
+          <span style={styles.menuEmoji}>◈</span>
+          <span>System Notification</span>
+        </button>
+      )}
+
+      {/* 5. Help Board */}
+      <button
+        onClick={() => handleMenuClick("help-bradley")}
+        style={{ ...styles.menuItem, ...(activeMenu === "help-bradley" ? styles.menuItemActive : {}) }}
+      >
+        {activeMenu === "help-bradley" && <span style={styles.activeBar} />}
+        <span style={styles.menuEmoji}>◇</span>
+        <span>HELP BOARD</span>
+      </button>
+
+      {/* 6. Admin 대메뉴 — 최하단 */}
+      {user?.id === ADMIN_ID && (
+        <div style={{ borderTop: "1px solid #E8E8E8", marginTop: "auto", paddingTop: "8px" }}>
+          <button onClick={() => setAdminOpen(v => !v)} style={accordionHdrStyle}>
+            <span style={{ display: "flex", alignItems: "center" }}>
+              <span style={styles.menuEmoji}>◎</span>
+              <span>Admin</span>
+            </span>
+            <span style={{ fontSize: "10px", color: "#94A3B8", marginRight: "4px" }}>
+              {adminOpen ? "▲" : "▼"}
+            </span>
           </button>
-        );
-      })}
+          {adminOpen && (
+            <div style={subWrap}>
+              {subBtn("user-mgmt", t("nav.menus.userManagement"))}
+            </div>
+          )}
+        </div>
+      )}
     </nav>
   );
 
@@ -573,7 +681,7 @@ function MainPage() {
           {isMobile && (
             <div style={styles.mobileTopBar}>
               <span style={styles.mobileMenuLabel}>
-                {MENU_ITEMS.find((m) => m.id === activeMenu)?.label ?? ""}
+                {ALL_MENU_LABELS[activeMenu] ?? ""}
               </span>
               <span style={styles.mobileUserLabel}>{deptNm}_{name}</span>
             </div>
@@ -599,6 +707,10 @@ function MainPage() {
             <WeeklyTaskBoardPage />
           ) : activeMenu === "ai-report" ? (
             <AIWeeklyReportPage />
+          ) : activeMenu === "issue-manage" ? (
+            <IssueManagePage />
+          ) : activeMenu === "issue-dashboard" ? (
+            <IssueDashboardPage />
           ) : (
             <div style={styles.contentArea}>
               {activeMenu ? (

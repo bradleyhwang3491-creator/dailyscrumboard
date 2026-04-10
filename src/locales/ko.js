@@ -62,7 +62,7 @@ export const ko = {
       yearlyTaskBoardCRM: "Yearly Task Board(CRM)",
       weeklyTaskBoard: "Weekly Task Board",
       aiWeeklyReport: "AI Weekly Report",
-      userManagement: "사용자 정보 관리",
+      userManagement: "User Management",
     },
   },
 
