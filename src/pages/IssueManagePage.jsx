@@ -584,7 +584,11 @@ export default function IssueManagePage() {
   async function handleSearch() {
     setLoading(true); setSearched(true); setSelectedId(null);
     let q = supabase.from("SYSTEM_ERRORREPORT").select("*").order("ID", { ascending: false });
-    if (searchTask)             q = q.eq("TASK_ID", Number(searchTask));
+    if (searchTask) {
+      q = q.eq("TASK_ID", Number(searchTask));
+    } else if (tm1List.length > 0) {
+      q = q.in("TASK_ID", tm1List.map(t => t.TASK_ID));
+    }
     if (searchFrom)             q = q.gte("INSERT_DT", searchFrom);
     if (searchTo)               q = q.lte("INSERT_DT", searchTo);
     if (searchTestGubun)        q = q.eq("TEST_GUBUN", searchTestGubun);
