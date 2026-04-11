@@ -584,18 +584,19 @@ export default function IssueManagePage() {
   async function handleSearch() {
     setLoading(true); setSearched(true); setSelectedId(null);
     let q = supabase.from("SYSTEM_ERRORREPORT").select("*").order("ID", { ascending: false });
-    if (searchTask)             q = q.eq("TASK_ID", searchTask);
+    if (searchTask)             q = q.eq("TASK_ID", Number(searchTask));
     if (searchFrom)             q = q.gte("INSERT_DT", searchFrom);
-    if (searchTo)               q = q.lte("INSERT_DT", searchTo + "T23:59:59");
-    if (searchTestGubun)         q = q.eq("TEST_GUBUN", searchTestGubun);
-    if (searchErrGubun)          q = q.eq("ERROR_GUBUN", searchErrGubun);
+    if (searchTo)               q = q.lte("INSERT_DT", searchTo);
+    if (searchTestGubun)        q = q.eq("TEST_GUBUN", searchTestGubun);
+    if (searchErrGubun)         q = q.eq("ERROR_GUBUN", searchErrGubun);
     if (searchLevel)            q = q.eq("IMPORTANT_LEVEL", searchLevel);
     if (searchManager)          q = q.eq("MANAGE_ID", searchManager);
     if (searchTitle.trim())     q = q.ilike("ERROR_TITLE", `%${searchTitle.trim()}%`);
     if (searchComplete === "Y") q = q.eq("COMPLETE_YN", "Y");
-    if (searchComplete === "N") q = q.neq("COMPLETE_YN", "Y");
+    if (searchComplete === "N") q = q.or("COMPLETE_YN.eq.N,COMPLETE_YN.is.null");
     const { data, error } = await q;
-    if (!error) setRows(data ?? []);
+    if (error) { console.error("조회 오류:", error.message); }
+    setRows(data ?? []);
     setLoading(false);
   }
 
@@ -1116,6 +1117,7 @@ export default function IssueManagePage() {
           <div style={im.field}>
             <label style={im.label}>업무구분</label>
             <select style={im.select} value={searchTask} onChange={e => setSearchTask(e.target.value)}>
+              <option value="">전체</option>
               {tm1List.map(t => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
             </select>
           </div>
