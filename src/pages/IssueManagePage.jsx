@@ -47,7 +47,7 @@ const zoomBtnStyle = {
    - objects(state): 도형·텍스트 객체 목록 (이동 가능)
    - select 툴로 객체 선택 후 드래그로 이동
 ══════════════════════════════════════════ */
-function CanvasEditor({ onImageReady }) {
+function CanvasEditor({ onImageReady, editorWidth = 560 }) {
   const canvasRef  = useRef(null);
   const scrollRef  = useRef(null);
   const baseData   = useRef(null);   // ImageData: image + pen strokes
@@ -211,7 +211,7 @@ function CanvasEditor({ onImageReady }) {
         baseData.current = ctx.getImageData(0, 0, w, h);
         setObjects([]); setSelId(null); setHistory([]);
         setCanvasSize({ w, h }); setHasImage(true);
-        const initZoom = Math.min(1, 560 / w);
+        const initZoom = Math.min(1, editorWidth / w);
         setZoom(parseFloat(initZoom.toFixed(2)));
         canvas.toBlob(blob => { if (blob) onImageReady(blob); }, "image/png");
       };
@@ -382,7 +382,7 @@ function CanvasEditor({ onImageReady }) {
   /* ── 줌 ── */
   const zoomIn  = () => setZoom(z => Math.min(parseFloat((z + 0.1).toFixed(2)), 3));
   const zoomOut = () => setZoom(z => Math.max(parseFloat((z - 0.1).toFixed(2)), 0.1));
-  const zoomFit = () => setZoom(parseFloat(Math.min(1, 560 / (canvasSize.w || 560)).toFixed(2)));
+  const zoomFit = () => setZoom(parseFloat(Math.min(1, editorWidth / (canvasSize.w || editorWidth)).toFixed(2)));
 
   function notifyParent() {
     const canvas = canvasRef.current;
@@ -540,6 +540,7 @@ export default function IssueManagePage() {
   const [selectedId, setSelectedId] = useState(null);
 
   const [showReg,   setShowReg]   = useState(false);
+  const [regStep,   setRegStep]   = useState(1);   // 1: 이미지, 2: 폼
   const [regForm,   setRegForm]   = useState(INIT_REG);
   const [regErr,    setRegErr]    = useState({});
   const [regSaving, setRegSaving] = useState(false);
@@ -1212,7 +1213,7 @@ export default function IssueManagePage() {
 
       {/* 액션 버튼 */}
       <div style={{ display:"flex", gap:"8px", marginBottom:"10px", justifyContent:"flex-end" }}>
-        <button style={im.actionBtn} onClick={() => { setRegForm(INIT_REG); setRegErr({}); setImageBlob(null); setShowReg(true); }}>
+        <button style={im.actionBtn} onClick={() => { setRegForm(INIT_REG); setRegErr({}); setImageBlob(null); setRegStep(1); setShowReg(true); }}>
           + 이슈등록
         </button>
       </div>
@@ -1278,111 +1279,238 @@ export default function IssueManagePage() {
         </div>
       )}
 
-      {/* ── 이슈등록 모달 ── */}
-      {showReg && (
-        <div style={im.overlay} onClick={e => e.target === e.currentTarget && setShowReg(false)}>
-          <div style={im.modal}>
-            <div style={im.modalHeader}>
-              <h3 style={im.modalTitle}>이슈 등록</h3>
-              <button style={im.closeBtn} onClick={() => setShowReg(false)}>✕</button>
-            </div>
-            <div style={im.modalBody}>
-              {/* 2컬럼 레이아웃 */}
-              <div style={{ display:"flex", gap:"24px", flex:1, minHeight:0 }}>
+      {/* ── 이슈등록 모달 (2-Step) ── */}
+      {showReg && (() => {
+        /* Step 인디케이터 공용 스타일 */
+        const stepCircle = (n, active, done) => ({
+          width:"32px", height:"32px", borderRadius:"50%", fontSize:"13px", fontWeight:"700",
+          display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+          backgroundColor: done ? "#16A34A" : active ? "#2563EB" : "#E2E8F0",
+          color: done || active ? "#fff" : "#94A3B8",
+          transition:"all 0.2s",
+        });
+        const stepLine = (done) => ({
+          flex:1, height:"2px", borderRadius:"2px", margin:"0 8px",
+          backgroundColor: done ? "#16A34A" : "#E2E8F0", transition:"background 0.3s",
+        });
 
-                {/* 왼쪽: 이미지 편집기 */}
-                <div style={{ flex:"0 0 560px", display:"flex", flexDirection:"column", gap:"8px" }}>
-                  <p style={{ margin:0, fontSize:"13px", fontWeight:"600", color:"#374151" }}>
-                    이미지 첨부 &amp; 편집
-                    <span style={{ marginLeft:"8px", fontSize:"11px", color:"#94A3B8", fontWeight:"400" }}>
-                      업로드 후 펜·밑줄·텍스트로 편집하세요
-                    </span>
-                  </p>
-                  <CanvasEditor onImageReady={blob => setImageBlob(blob)} />
-                </div>
+        return (
+          <div style={im.overlay} onClick={e => e.target === e.currentTarget && setShowReg(false)}>
+            <div style={{ ...im.modal, maxWidth:"1100px", height:"88vh" }}>
 
-                {/* 오른쪽: 폼 */}
-                <div style={{ flex:1, display:"flex", flexDirection:"column", gap:"14px", overflowY:"auto" }}>
-                  <div style={im.formRow}>
-                    <label style={im.formLabel}>프로젝트명 <span style={{ color:"#DC2626" }}>*</span></label>
-                    <select style={{ ...im.select, width:"100%" }}
-                      value={regForm.taskId} onChange={e => setRegForm(f => ({ ...f, taskId: e.target.value }))}>
-                      <option value="">선택</option>
-                      {tm1List.map(t => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
-                    </select>
-                    {regErr.taskId && <span style={im.errMsg}>{regErr.taskId}</span>}
+              {/* ── 헤더 ── */}
+              <div style={{ padding:"18px 28px", borderBottom:"1px solid #E8E8E8", flexShrink:0,
+                background:"#fff", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:"16px", flex:1 }}>
+                  {/* 타이틀 */}
+                  <div>
+                    <h3 style={{ margin:0, fontSize:"16px", fontWeight:"700", color:"#1E293B" }}>이슈 등록</h3>
                   </div>
-                  <div style={im.formRow}>
-                    <label style={im.formLabel}>테스트구분</label>
-                    <select style={{ ...im.select, width:"100%" }}
-                      value={regForm.testGubun} onChange={e => setRegForm(f => ({ ...f, testGubun: e.target.value }))}>
-                      <option value="">선택</option>
-                      {TEST_GUBUN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display:"flex", gap:"12px" }}>
-                    <div style={{ ...im.formRow, flex:1 }}>
-                      <label style={im.formLabel}>오류구분 <span style={{ color:"#DC2626" }}>*</span></label>
-                      <select style={{ ...im.select, width:"100%" }}
-                        value={regForm.errGubun} onChange={e => setRegForm(f => ({ ...f, errGubun: e.target.value }))}>
-                        <option value="">선택</option><option value="오류">오류</option><option value="개선">개선</option>
-                      </select>
-                      {regErr.errGubun && <span style={im.errMsg}>{regErr.errGubun}</span>}
+                  {/* Step 인디케이터 */}
+                  <div style={{ display:"flex", alignItems:"center", flex:1, maxWidth:"360px", marginLeft:"24px" }}>
+                    {/* Step 1 */}
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                      <div style={stepCircle(1, regStep===1, regStep>1)}>
+                        {regStep > 1 ? "✓" : "1"}
+                      </div>
+                      <div>
+                        <p style={{ margin:0, fontSize:"11px", fontWeight:"700",
+                          color: regStep===1 ? "#2563EB" : regStep>1 ? "#16A34A" : "#94A3B8" }}>
+                          STEP 1
+                        </p>
+                        <p style={{ margin:0, fontSize:"12px", color: regStep===1 ? "#1E293B" : "#94A3B8" }}>
+                          오류 화면 첨부
+                        </p>
+                      </div>
                     </div>
-                    <div style={{ ...im.formRow, flex:1 }}>
-                      <label style={im.formLabel}>중요도 <span style={{ color:"#DC2626" }}>*</span></label>
-                      <select style={{ ...im.select, width:"100%" }}
-                        value={regForm.level} onChange={e => setRegForm(f => ({ ...f, level: e.target.value }))}>
-                        <option value="">선택</option><option value="긴급">긴급</option><option value="상">상</option>
-                        <option value="중">중</option><option value="하">하</option>
-                      </select>
-                      {regErr.level && <span style={im.errMsg}>{regErr.level}</span>}
+                    {/* 연결선 */}
+                    <div style={stepLine(regStep > 1)} />
+                    {/* Step 2 */}
+                    <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+                      <div style={stepCircle(2, regStep===2, false)}>2</div>
+                      <div>
+                        <p style={{ margin:0, fontSize:"11px", fontWeight:"700",
+                          color: regStep===2 ? "#2563EB" : "#94A3B8" }}>
+                          STEP 2
+                        </p>
+                        <p style={{ margin:0, fontSize:"12px", color: regStep===2 ? "#1E293B" : "#94A3B8" }}>
+                          오류 내용 등록
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div style={im.formRow}>
-                    <label style={im.formLabel}>완료요청일자</label>
-                    <input type="date" style={{ ...im.input, width:"100%" }}
-                      value={regForm.fixRequestDate} onChange={e => setRegForm(f => ({ ...f, fixRequestDate: e.target.value }))} />
-                  </div>
-                  <div style={{ display:"flex", gap:"12px" }}>
-                    <div style={{ ...im.formRow, flex:1 }}>
-                      <label style={im.formLabel}>화면명</label>
-                      <input style={{ ...im.input, width:"100%" }} placeholder="예) 이슈 관리 화면"
-                        value={regForm.menuNm} onChange={e => setRegForm(f => ({ ...f, menuNm: e.target.value }))} />
-                    </div>
-                    <div style={{ ...im.formRow, flex:1 }}>
-                      <label style={im.formLabel}>화면 경로</label>
-                      <input style={{ ...im.input, width:"100%" }} placeholder="예) 메인 > 프로젝트 리포트 > 이슈관리"
-                        value={regForm.menuPath} onChange={e => setRegForm(f => ({ ...f, menuPath: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div style={im.formRow}>
-                    <label style={im.formLabel}>제목 <span style={{ color:"#DC2626" }}>*</span></label>
-                    <input style={{ ...im.input, width:"100%" }} placeholder="이슈 제목을 입력하세요"
-                      value={regForm.title} onChange={e => setRegForm(f => ({ ...f, title: e.target.value }))} />
-                    {regErr.title && <span style={im.errMsg}>{regErr.title}</span>}
-                  </div>
-                  <div style={{ ...im.formRow, flex:1 }}>
-                    <label style={im.formLabel}>오류 내용</label>
-                    <textarea style={{ ...im.textarea, flex:1, minHeight:"200px", resize:"vertical" }}
-                      placeholder="오류 내용을 상세히 입력하세요&#10;&#10;• 발생 상황&#10;• 재현 방법&#10;• 예상 동작"
-                      value={regForm.content} onChange={e => setRegForm(f => ({ ...f, content: e.target.value }))} />
                   </div>
                 </div>
+                <button style={im.closeBtn} onClick={() => setShowReg(false)}>✕</button>
               </div>
-            </div>
-            <div style={im.modalFooter}>
-              {imageBlob && (
-                <span style={{ fontSize:"12px", color:"#16A34A", marginRight:"auto" }}>✓ 이미지 편집 완료 (저장 시 업로드됩니다)</span>
+
+              {/* ── STEP 1: 이미지 업로드 & 편집 ── */}
+              {regStep === 1 && (
+                <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minHeight:0 }}>
+                  {/* 안내 배너 */}
+                  <div style={{ padding:"12px 28px", backgroundColor:"#F0F9FF",
+                    borderBottom:"1px solid #BAE6FD", flexShrink:0,
+                    display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <span style={{ fontSize:"13px", color:"#0369A1" }}>
+                      🖼️ &nbsp;오류 화면을 업로드하고 펜·도형·텍스트로 표시하세요.&nbsp;
+                      <strong>이미지 첨부는 선택사항입니다.</strong>
+                    </span>
+                    {imageBlob && (
+                      <span style={{ fontSize:"12px", fontWeight:"700", color:"#16A34A",
+                        backgroundColor:"#DCFCE7", padding:"3px 12px", borderRadius:"20px" }}>
+                        ✓ 이미지 준비됨
+                      </span>
+                    )}
+                  </div>
+                  {/* 캔버스 */}
+                  <div style={{ flex:1, padding:"20px 28px", display:"flex",
+                    flexDirection:"column", overflow:"hidden", minHeight:0 }}>
+                    <CanvasEditor onImageReady={blob => setImageBlob(blob)} editorWidth={960} />
+                  </div>
+                  {/* 푸터 */}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                    padding:"14px 28px", borderTop:"1px solid #E8E8E8", flexShrink:0, backgroundColor:"#fff" }}>
+                    <button style={im.resetBtn} onClick={() => setShowReg(false)}>취소</button>
+                    <div style={{ display:"flex", gap:"8px" }}>
+                      {imageBlob && (
+                        <button style={{ ...im.resetBtn, color:"#DC2626", borderColor:"#FECACA" }}
+                          onClick={() => setImageBlob(null)}>
+                          🗑 이미지 제거
+                        </button>
+                      )}
+                      <button style={{ ...im.searchBtn, padding:"8px 28px" }}
+                        onClick={() => setRegStep(2)}>
+                        다음 &rarr;
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
-              <button style={im.resetBtn} onClick={() => setShowReg(false)}>취소</button>
-              <button style={im.searchBtn} onClick={handleRegSave} disabled={regSaving}>
-                {regSaving ? "저장 중..." : "등록"}
-              </button>
+
+              {/* ── STEP 2: 이슈 정보 입력 ── */}
+              {regStep === 2 && (
+                <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minHeight:0 }}>
+                  {/* 이미지 요약 배너 */}
+                  <div style={{ padding:"10px 28px", flexShrink:0,
+                    backgroundColor: imageBlob ? "#F0FDF4" : "#FFFBEB",
+                    borderBottom:`1px solid ${imageBlob ? "#BBF7D0" : "#FDE68A"}` }}>
+                    {imageBlob
+                      ? <span style={{ fontSize:"13px", color:"#15803D" }}>✓ 첨부 이미지 연결됨 — 저장 시 함께 업로드됩니다</span>
+                      : <span style={{ fontSize:"13px", color:"#92400E" }}>⚠ 첨부 이미지 없음 — Step 1로 돌아가 이미지를 추가할 수 있습니다</span>
+                    }
+                  </div>
+
+                  {/* 폼 */}
+                  <div style={{ flex:1, overflowY:"auto", padding:"24px 28px" }}>
+                    <div style={{ maxWidth:"720px", margin:"0 auto", display:"flex",
+                      flexDirection:"column", gap:"18px" }}>
+
+                      {/* 프로젝트명 */}
+                      <div style={im.formRow}>
+                        <label style={im.formLabel}>프로젝트명 <span style={{ color:"#DC2626" }}>*</span></label>
+                        <select style={{ ...im.select, width:"100%" }}
+                          value={regForm.taskId} onChange={e => setRegForm(f => ({ ...f, taskId: e.target.value }))}>
+                          <option value="">선택</option>
+                          {tm1List.map(t => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
+                        </select>
+                        {regErr.taskId && <span style={im.errMsg}>{regErr.taskId}</span>}
+                      </div>
+
+                      {/* 테스트구분 / 오류구분 / 중요도 */}
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"14px" }}>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>테스트구분</label>
+                          <select style={{ ...im.select, width:"100%" }}
+                            value={regForm.testGubun} onChange={e => setRegForm(f => ({ ...f, testGubun: e.target.value }))}>
+                            <option value="">선택</option>
+                            {TEST_GUBUN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </div>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>오류구분 <span style={{ color:"#DC2626" }}>*</span></label>
+                          <select style={{ ...im.select, width:"100%" }}
+                            value={regForm.errGubun} onChange={e => setRegForm(f => ({ ...f, errGubun: e.target.value }))}>
+                            <option value="">선택</option><option value="오류">오류</option><option value="개선">개선</option>
+                          </select>
+                          {regErr.errGubun && <span style={im.errMsg}>{regErr.errGubun}</span>}
+                        </div>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>중요도 <span style={{ color:"#DC2626" }}>*</span></label>
+                          <select style={{ ...im.select, width:"100%" }}
+                            value={regForm.level} onChange={e => setRegForm(f => ({ ...f, level: e.target.value }))}>
+                            <option value="">선택</option><option value="긴급">긴급</option>
+                            <option value="상">상</option><option value="중">중</option><option value="하">하</option>
+                          </select>
+                          {regErr.level && <span style={im.errMsg}>{regErr.level}</span>}
+                        </div>
+                      </div>
+
+                      {/* 완료요청일자 / 화면명 / 화면경로 */}
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"14px" }}>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>완료요청일자</label>
+                          <input type="date" style={{ ...im.input, width:"100%" }}
+                            value={regForm.fixRequestDate}
+                            onChange={e => setRegForm(f => ({ ...f, fixRequestDate: e.target.value }))} />
+                        </div>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>화면명</label>
+                          <input style={{ ...im.input, width:"100%" }} placeholder="예) 이슈 관리 화면"
+                            value={regForm.menuNm} onChange={e => setRegForm(f => ({ ...f, menuNm: e.target.value }))} />
+                        </div>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>화면 경로</label>
+                          <input style={{ ...im.input, width:"100%" }} placeholder="예) 메인 > 이슈관리"
+                            value={regForm.menuPath} onChange={e => setRegForm(f => ({ ...f, menuPath: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      {/* 이슈 제목 */}
+                      <div style={im.formRow}>
+                        <label style={im.formLabel}>이슈 제목 <span style={{ color:"#DC2626" }}>*</span></label>
+                        <input
+                          style={{ ...im.input, width:"100%", fontSize:"14px", padding:"10px 12px" }}
+                          placeholder="이슈 제목을 입력하세요"
+                          value={regForm.title}
+                          onChange={e => setRegForm(f => ({ ...f, title: e.target.value }))} />
+                        {regErr.title && <span style={im.errMsg}>{regErr.title}</span>}
+                      </div>
+
+                      {/* 오류 내용 */}
+                      <div style={im.formRow}>
+                        <label style={im.formLabel}>오류 내용</label>
+                        <textarea
+                          style={{ ...im.textarea, width:"100%", minHeight:"200px", resize:"vertical",
+                            boxSizing:"border-box", fontSize:"13px", lineHeight:"1.7" }}
+                          placeholder={"오류 내용을 상세히 입력하세요\n\n• 발생 상황\n• 재현 방법\n• 예상 동작"}
+                          value={regForm.content}
+                          onChange={e => setRegForm(f => ({ ...f, content: e.target.value }))} />
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* 푸터 */}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+                    padding:"14px 28px", borderTop:"1px solid #E8E8E8", flexShrink:0, backgroundColor:"#fff" }}>
+                    <button style={im.resetBtn} onClick={() => setRegStep(1)}>
+                      &larr; 이전
+                    </button>
+                    <div style={{ display:"flex", gap:"8px" }}>
+                      <button style={im.resetBtn} onClick={() => setShowReg(false)}>취소</button>
+                      <button
+                        style={{ ...im.searchBtn, padding:"8px 32px", fontSize:"13px" }}
+                        onClick={handleRegSave} disabled={regSaving}>
+                        {regSaving ? "저장 중..." : "✓ 등록"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -1425,7 +1553,7 @@ const im = {
   td:         { padding:"11px 12px", fontSize:"13px", color:"#334155", verticalAlign:"middle" },
   ellipsis:   { display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
   overlay:    { position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.5)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" },
-  modal:      { backgroundColor:"#fff", borderRadius:"14px", width:"95vw", maxWidth:"1100px", height:"85vh", display:"flex", flexDirection:"column", boxShadow:"0 8px 40px rgba(0,0,0,0.22)", overflow:"hidden" },
+  modal:      { backgroundColor:"#fff", borderRadius:"14px", width:"96vw", maxWidth:"1400px", height:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 8px 40px rgba(0,0,0,0.22)", overflow:"hidden" },
   modalHeader:{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"18px 24px", borderBottom:"1px solid #E8E8E8", flexShrink:0 },
   modalTitle: { fontSize:"16px", fontWeight:"700", color:"#1E293B", margin:0 },
   closeBtn:   { background:"none", border:"none", fontSize:"18px", color:"#94A3B8", cursor:"pointer" },
