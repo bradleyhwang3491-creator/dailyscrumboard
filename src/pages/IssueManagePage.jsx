@@ -721,6 +721,24 @@ export default function IssueManagePage() {
     if (detailRow) { await refreshDetailRow(id); } else { handleSearch(); }
   }
 
+  async function handleDelete(row) {
+    if (row.MANAGE_ID) { alert("접수된 이슈는 삭제할 수 없습니다."); return; }
+    if (!window.confirm("이슈를 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.")) return;
+
+    // 첨부 이미지 스토리지에서 삭제
+    if (row.image_url) {
+      const parts = row.image_url.split("issue-images/");
+      if (parts.length === 2) {
+        await supabase.storage.from("issue-images").remove([parts[1]]);
+      }
+    }
+
+    const { error } = await supabase.from("SYSTEM_ERRORREPORT").delete().eq("ID", row.ID);
+    if (error) { alert("삭제 오류: " + error.message); return; }
+    setDetailRow(null);
+    handleSearch();
+  }
+
   const taskNameMap = Object.fromEntries(tm1List.map(t => [String(t.TASK_ID), t.TASK_NAME]));
   const selectedRow = rows.find(r => r.ID === selectedId);
   const canAccept   = selectedId && selectedRow && !selectedRow.MANAGE_ID;
@@ -730,10 +748,11 @@ export default function IssueManagePage() {
   // 상세 페이지 전환
   if (detailRow) {
     const d = detailRow;
-    const isComplete    = d.COMPLETE_YN === "Y";
-    const canEditDetail = d.INSERT_ID === user?.id;
+    const isComplete      = d.COMPLETE_YN === "Y";
+    const canEditDetail   = d.INSERT_ID === user?.id;
+    const canDeleteDetail = d.INSERT_ID === user?.id && !d.MANAGE_ID;
     const canAcceptDetail = !d.MANAGE_ID;
-    const canFixDetail  = !!d.MANAGE_ID && d.COMPLETE_YN !== "Y";
+    const canFixDetail    = !!d.MANAGE_ID && d.COMPLETE_YN !== "Y";
     let elapsedDays = null;
     if (d.FIX_REQUEST_DATE && d.FIX_DATE) {
       const req  = new Date(d.FIX_REQUEST_DATE);
@@ -787,6 +806,13 @@ export default function IssueManagePage() {
               {isComplete ? "✓ 완료" : "⏳ 미완료"}
             </span>
             {/* 액션 버튼 */}
+            {canDeleteDetail && (
+              <button onClick={() => handleDelete(d)} style={{
+                padding:"6px 14px", border:"none", borderRadius:"7px",
+                backgroundColor:"#DC2626", color:"#fff", fontSize:"12px", fontWeight:"600",
+                cursor:"pointer", fontFamily:"'Pretendard', sans-serif",
+              }}>🗑 삭제</button>
+            )}
             {canEditDetail && (
               <button onClick={openDetailEdit} style={{
                 padding:"6px 14px", border:"none", borderRadius:"7px",
