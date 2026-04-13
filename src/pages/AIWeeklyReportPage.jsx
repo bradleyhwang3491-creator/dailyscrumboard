@@ -9,10 +9,8 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 const FALLBACK_MODELS = [
   { ver: "v1beta", name: "gemini-2.5-flash-preview-04-17" },
-  { ver: "v1beta", name: "gemini-2.5-flash-preview-05-20" },
   { ver: "v1beta", name: "gemini-2.5-flash" },
-  { ver: "v1",     name: "gemini-2.0-flash" },
-  { ver: "v1",     name: "gemini-1.5-flash" },
+  { ver: "v1beta", name: "gemini-2.0-flash" },
 ];
 
 /* ────────────────────── 헬퍼 ────────────────────── */
@@ -46,6 +44,7 @@ async function callGemini(prompt) {
       const json = await res.json();
       const text = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
       if (text) return { ok: true, text };
+      lastError = `${name}: 빈 응답`;
     } catch (e) {
       lastError = e.message;
     }

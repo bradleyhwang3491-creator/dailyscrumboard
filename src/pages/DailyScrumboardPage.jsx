@@ -29,6 +29,7 @@ const INIT_FORM = {
   priority: "하",
   relatedLink: "",
   coworkerIds: [],  // 협업 동료 ID 배열
+  systemNms: [],    // 시스템명 배열
 };
 
 /* ─────────────────────────── 헬퍼 ─────────────────────────── */
@@ -65,9 +66,11 @@ function DailyScrumboardPage() {
   const [tm4,       setTm4]       = useState([]);
   const [userMap,   setUserMap]   = useState({});
   const [deptUsers, setDeptUsers] = useState([]); // 같은 부서 사용자 목록
+  const [systemList,    setSystemList]    = useState([]); // 시스템 목록
 
   // 조회 조건
   const [searchType1,        setSearchType1]        = useState("");
+  const [searchSystemNm,     setSearchSystemNm]     = useState("");
   const [searchUserId,       setSearchUserId]        = useState("");
   const [searchPriority,     setSearchPriority]      = useState("");
   const [searchOverdue,      setSearchOverdue]       = useState(false);
@@ -146,6 +149,13 @@ function DailyScrumboardPage() {
       ? data.filter((u) => u.DEPT_CD === myDept)
       : data;
     setDeptUsers(sameTeam);
+
+    // 시스템 목록 조회
+    const dept = user?.deptCd;
+    let sq = supabase.from("OPERATING_SYSTEM").select("SYSTEM_NM, DEPT_CD").order("SYSTEM_NM");
+    if (dept) sq = sq.eq("DEPT_CD", dept);
+    const { data: sysData } = await sq;
+    setSystemList(sysData ?? []);
   }
 
   /** TASK_BOARD 조회 (로그인 사용자 부서 필터) */
@@ -204,6 +214,8 @@ function DailyScrumboardPage() {
       registrantId:    t.ID ?? "",
       issueCompleteYn: t.ISSUE_COMPLETE_YN ?? "N",
       coworkerIds:     cwMap[t.BOARD_ID] || [],
+      systemNm:        t.SYSTEM_NM ?? "",
+      systemNms:       t.SYSTEM_NM ? t.SYSTEM_NM.split(",").map(s => s.trim()).filter(Boolean) : [],
     })));
   }
 
@@ -214,6 +226,7 @@ function DailyScrumboardPage() {
     if (searchUserId   && t.registrantId !== searchUserId) return false;
     if (searchPriority && t.priority !== searchPriority)   return false;
     if (searchOverdue && !(t.plannedEnd && t.plannedEnd < today && t.status !== "COMPLETE")) return false;
+    if (searchSystemNm && !t.systemNm?.includes(searchSystemNm)) return false;
     return true;
   });
 
@@ -239,6 +252,7 @@ function DailyScrumboardPage() {
       STATUS:           regForm.status,
       IMPORTANT_GUBUN:  regForm.priority,
       PAGE_URL:         regForm.relatedLink,
+      SYSTEM_NM:        regForm.systemNms?.length > 0 ? regForm.systemNms.join(",") : null,
     };
 
     // 주 등록자 행 insert
@@ -318,6 +332,7 @@ function DailyScrumboardPage() {
       STATUS:          editForm.status,
       IMPORTANT_GUBUN: editForm.priority,
       PAGE_URL:        editForm.relatedLink,
+      SYSTEM_NM:       editForm.systemNms?.length > 0 ? editForm.systemNms.join(",") : null,
     }).eq("BOARD_ID", editForm.id);
     if (!error) {
       // 협업 동료 업데이트: DB에서 기존 데이터 조회 후 분기 처리
@@ -475,6 +490,24 @@ function DailyScrumboardPage() {
       else if (level === "2") rm(setTm2);
       else if (level === "3") rm(setTm3);
       else if (level === "4") rm(setTm4);
+    }
+    return { success: !error, message: error?.message };
+  }
+
+  /* ── 시스템 등록 ── */
+  async function handleSysRegSave(name, callback) {
+    if (!name.trim()) return { success: false, message: "시스템명을 입력해주세요." };
+    const { error } = await supabase.from("OPERATING_SYSTEM").insert({
+      SYSTEM_NM: name.trim(),
+      DEPT_CD:   user?.deptCd ?? null,
+    });
+    if (!error) {
+      const dept = user?.deptCd;
+      let sq = supabase.from("OPERATING_SYSTEM").select("SYSTEM_NM, DEPT_CD").order("SYSTEM_NM");
+      if (dept) sq = sq.eq("DEPT_CD", dept);
+      const { data: sysData } = await sq;
+      setSystemList(sysData ?? []);
+      if (callback) callback();
     }
     return { success: !error, message: error?.message };
   }
@@ -649,6 +682,13 @@ function DailyScrumboardPage() {
           </select>
         </div>
         <div style={isMobile ? s.searchFieldMobile : s.searchField}>
+          <label style={s.searchLabel}>시스템명</label>
+          <select style={isMobile ? s.searchSelectFull : s.searchSelect} value={searchSystemNm} onChange={(e) => setSearchSystemNm(e.target.value)}>
+            <option value="">{t("common.all")}</option>
+            {systemList.map((sys) => <option key={sys.SYSTEM_NM} value={sys.SYSTEM_NM}>{sys.SYSTEM_NM}</option>)}
+          </select>
+        </div>
+        <div style={isMobile ? s.searchFieldMobile : s.searchField}>
           <label style={{ ...s.searchLabel, display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", userSelect: "none" }}>
             <input
               type="checkbox"
@@ -662,6 +702,7 @@ function DailyScrumboardPage() {
         <button style={isMobile ? s.searchBtnFull : s.searchBtn} onClick={() => fetchTasks()}>조회</button>
         <button style={isMobile ? s.resetBtnFull : s.resetBtn} onClick={() => {
           setSearchType1(""); setSearchUserId(""); setSearchPriority(""); setSearchOverdue(false);
+          setSearchSystemNm("");
           setSearchCompleteFrom(getTwoWeeksAgo()); setSearchCompleteTo(getToday());
           setTimeout(() => fetchTasks(), 0);
         }}>{t("common.reset")}</button>
@@ -794,7 +835,9 @@ function DailyScrumboardPage() {
           onAddTaskMaster={handleAddTaskMaster}
           onDeleteTaskMaster={handleDeleteTaskMaster}
           showRegistrantSelect={true}
-          deptUsers={deptUsers} />
+          deptUsers={deptUsers}
+          systemList={systemList}
+          onSysRegSave={handleSysRegSave} />
       )}
 
       {/* 상세/수정 모달 */}
@@ -814,7 +857,9 @@ function DailyScrumboardPage() {
           onDelete={!isEditing ? handleDelete : null}
           onCopyRegister={!isEditing ? handleCopyRegister : null}
           showRegistrantSelect={true}
-          deptUsers={deptUsers} />
+          deptUsers={deptUsers}
+          systemList={systemList}
+          onSysRegSave={handleSysRegSave} />
       )}
 
       {/* 업무구분1 관리 모달 */}
@@ -1100,6 +1145,50 @@ function TaskMaster1Modal({ tm1, user, deptUsers = [], onClose, onSaved }) {
   );
 }
 
+/* ═══════════════════════ 시스템 멀티선택 ═══════════════════════ */
+function MultiSystemSelect({ systems, selected, onChange, placeholder = "선택 안함", readOnly = false }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (nm) => onChange(selected.includes(nm) ? selected.filter(s => s !== nm) : [...selected, nm]);
+  const label = selected.length === 0 ? placeholder : selected.join(", ");
+  if (readOnly) {
+    return (
+      <div style={{ ...ms.input, ...ms.inputRO, color: selected.length > 0 ? "#475569" : "#94A3B8" }}>
+        {label}
+      </div>
+    );
+  }
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{ ...ms.input, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", userSelect: "none" }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span style={{ color: selected.length > 0 ? "#1E293B" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{label}</span>
+        <span style={{ fontSize: "10px", color: "#94A3B8", flexShrink: 0, marginLeft: "4px" }}>{open ? "▴" : "▾"}</span>
+      </div>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 15 }} onClick={() => setOpen(false)} />
+          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, backgroundColor: "#fff", border: "1px solid #CBD5E1", borderRadius: "8px", zIndex: 20, maxHeight: "180px", overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)", marginTop: "2px" }}>
+            {systems.length === 0
+              ? <div style={{ padding: "10px 12px", fontSize: "13px", color: "#94A3B8" }}>시스템 없음</div>
+              : systems.map(sys => {
+                  const checked = selected.includes(sys.SYSTEM_NM);
+                  return (
+                    <label key={sys.SYSTEM_NM} style={{ display: "flex", alignItems: "center", padding: "7px 12px", cursor: "pointer", background: checked ? "#EFF6FF" : "transparent" }}>
+                      <input type="checkbox" checked={checked} onChange={() => toggle(sys.SYSTEM_NM)} style={{ marginRight: "8px", accentColor: "#2563EB" }} />
+                      <span style={{ fontSize: "13px", color: "#1E293B" }}>{sys.SYSTEM_NM}</span>
+                    </label>
+                  );
+                })
+            }
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ═══════════════════════ 카드 ═══════════════════════ */
 function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, deptUsers = [], onClick, onResolveIssue, isDragging, onDragStart, onDragEnd }) {
   const { t } = useLanguage();
@@ -1148,6 +1237,17 @@ function TaskCard({ task, tm1, tm2, tm3 = [], tm4 = [], userMap, deptUsers = [],
           {type2Nm && <span style={s.chip}>{type2Nm}</span>}
           {type3Nm && <span style={{ ...s.chip, backgroundColor: "#F0FDF4", color: "#15803D", borderColor: "#86EFAC" }}>{type3Nm}</span>}
           {type4Nm && <span style={{ ...s.chip, backgroundColor: "#FFF7ED", color: "#C2410C", borderColor: "#FDBA74" }}>{type4Nm}</span>}
+        </div>
+      )}
+
+      {/* 시스템명 */}
+      {task.systemNm && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
+          {task.systemNm.split(",").map(s => s.trim()).filter(Boolean).map(s => (
+            <span key={s} style={{ fontSize: "11px", color: "#0369A1", backgroundColor: "#E0F2FE", border: "1px solid #BAE6FD", borderRadius: "4px", padding: "2px 6px" }}>
+              🖥 {s}
+            </span>
+          ))}
         </div>
       )}
 
@@ -1276,11 +1376,27 @@ const STATUS_TEXT = { TODO: "TO-DO", PROGRESS: "PROGRESS", HOLDING: "HOLDING", C
 function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [], readOnly,
                      submitLabel, submitDisabled, onSubmit, onClose, closeLabel,
                      onResolveIssue, onAddTaskMaster, onDeleteTaskMaster, onDelete, onCopyRegister,
-                     showRegistrantSelect = false, deptUsers = [] }) {
+                     showRegistrantSelect = false, deptUsers = [],
+                     systemList = [], onSysRegSave }) {
   const { t } = useLanguage();
   const [textCopied, setTextCopied] = useState(false);
   const isMobile = useBreakpoint(768);
   const resolvedCloseLabel = closeLabel ?? t("common.close");
+
+  // 시스템 등록 팝업
+  const [showSysReg,   setShowSysReg]   = useState(false);
+  const [newSysNm,     setNewSysNm]     = useState("");
+  const [sysRegSaving, setSysRegSaving] = useState(false);
+  const [sysRegErr,    setSysRegErr]    = useState("");
+
+  async function handleSysReg() {
+    if (!newSysNm.trim()) { setSysRegErr("시스템명을 입력해주세요."); return; }
+    setSysRegSaving(true);
+    const result = await onSysRegSave?.(newSysNm.trim(), () => { setShowSysReg(false); setNewSysNm(""); });
+    setSysRegSaving(false);
+    if (result?.success === false) setSysRegErr("저장 오류: " + (result.message || "알 수 없는 오류"));
+    else { setShowSysReg(false); setNewSysNm(""); setSysRegErr(""); }
+  }
 
   // 업무구분 신규 등록 미니 팝업
   const [addTmLevel,      setAddTmLevel]      = useState(null); // null | "1" | "2"
@@ -1592,6 +1708,42 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
               </select>
             </div>
           </div>
+          {/* 시스템명 */}
+          <div style={ms.fullRow}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+              <label style={ms.label}>시스템명</label>
+              {!readOnly && onSysRegSave && (
+                <button style={ms.addTmBtn} onClick={() => { setShowSysReg(true); setNewSysNm(""); setSysRegErr(""); }}>+ 등록</button>
+              )}
+            </div>
+            <MultiSystemSelect
+              systems={systemList}
+              selected={form.systemNms || []}
+              onChange={(v) => f("systemNms", v)}
+              readOnly={readOnly}
+            />
+            {showSysReg && (
+              <div style={{ marginTop: "8px", padding: "12px", backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <input
+                    style={{ ...ms.input, flex: 1, marginBottom: 0 }}
+                    type="text"
+                    value={newSysNm}
+                    placeholder="시스템명 입력"
+                    autoFocus
+                    onChange={(e) => { setNewSysNm(e.target.value); setSysRegErr(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSysReg(); if (e.key === "Escape") setShowSysReg(false); }}
+                  />
+                  <button style={{ ...ms.submitBtn, padding: "8px 14px", fontSize: "13px" }} disabled={sysRegSaving} onClick={handleSysReg}>
+                    {sysRegSaving ? "저장중..." : "저장"}
+                  </button>
+                  <button style={{ ...ms.cancelBtn, padding: "8px 12px", fontSize: "13px" }} onClick={() => setShowSysReg(false)}>취소</button>
+                </div>
+                {sysRegErr && <p style={ms.err}>{sysRegErr}</p>}
+              </div>
+            )}
+          </div>
+
           {/* 연관페이지링크 (전체) */}
           <div style={ms.fullRow}>
             <label style={ms.label}>연관페이지링크</label>

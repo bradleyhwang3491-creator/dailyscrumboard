@@ -7,13 +7,12 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const FALLBACK_MODELS = [
   { ver: "v1beta", name: "gemini-2.5-flash-preview-04-17" },
   { ver: "v1beta", name: "gemini-2.5-flash" },
-  { ver: "v1",     name: "gemini-2.0-flash" },
-  { ver: "v1",     name: "gemini-1.5-flash" },
+  { ver: "v1beta", name: "gemini-2.0-flash" },
 ];
 async function callGemini(prompt) {
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.5, maxOutputTokens: 8192 },
+    generationConfig: { temperature: 0.5, maxOutputTokens: 4096 },
   });
   let lastErr = "";
   for (const { ver, name } of FALLBACK_MODELS) {
@@ -24,6 +23,7 @@ async function callGemini(prompt) {
       const json = await res.json();
       const text = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
       if (text) return { ok: true, text };
+      lastErr = `${name}: 빈 응답`;
     } catch(e) { lastErr = e.message; }
   }
   return { ok: false, error: lastErr };

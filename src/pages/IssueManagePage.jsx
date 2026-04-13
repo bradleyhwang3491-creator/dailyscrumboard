@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
@@ -13,6 +14,129 @@ const LEVEL_STYLE = {
   중:   { bg: "#E0F2FE", color: "#0369A1" },
   하:   { bg: "#F1F5F9", color: "#64748B" },
 };
+
+/* ── 멀티 유저 선택 드롭다운 ── */
+function MultiUserSelect({ users, selected, onChange, placeholder = "선택 안함" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggle = id => {
+    onChange(selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]);
+  };
+
+  const label = selected.length === 0
+    ? placeholder
+    : users.filter(u => selected.includes(u.ID)).map(u => u.NAME).join(", ");
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width:"100%", padding:"8px 12px", border:"1px solid #CBD5E1", borderRadius:"7px",
+          backgroundColor:"#fff", fontSize:"13px", color: selected.length ? "#1E293B" : "#94A3B8",
+          textAlign:"left", cursor:"pointer", fontFamily:"'Pretendard', sans-serif",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px",
+          overflow:"hidden" }}>
+        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{label}</span>
+        <span style={{ fontSize:"10px", color:"#94A3B8", flexShrink:0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, zIndex:200,
+          backgroundColor:"#fff", border:"1px solid #E2E8F0", borderRadius:"8px",
+          boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:"200px", overflowY:"auto" }}>
+          {users.length === 0
+            ? <p style={{ margin:0, padding:"12px", fontSize:"13px", color:"#94A3B8", textAlign:"center" }}>사용자 없음</p>
+            : users.map(u => (
+              <label key={u.ID} style={{ display:"flex", alignItems:"center", gap:"10px",
+                padding:"8px 14px", cursor:"pointer", fontSize:"13px",
+                backgroundColor: selected.includes(u.ID) ? "#EFF6FF" : "transparent",
+                color: selected.includes(u.ID) ? "#1D4ED8" : "#1E293B" }}>
+                <input type="checkbox" checked={selected.includes(u.ID)}
+                  onChange={() => toggle(u.ID)}
+                  style={{ width:"15px", height:"15px", cursor:"pointer", accentColor:"#2563EB" }} />
+                {u.NAME}
+              </label>
+            ))
+          }
+          {selected.length > 0 && (
+            <div style={{ borderTop:"1px solid #F1F5F9", padding:"6px 14px" }}>
+              <button type="button" onClick={() => onChange([])}
+                style={{ fontSize:"11px", color:"#DC2626", background:"none", border:"none",
+                  cursor:"pointer", fontFamily:"'Pretendard', sans-serif" }}>
+                ✕ 전체 해제
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 멀티 시스템 선택 드롭다운 (시스템명 문자열 기준) ── */
+function MultiSystemSelect({ systems, selected, onChange, placeholder = "선택 안함" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggle = nm => {
+    onChange(selected.includes(nm) ? selected.filter(s => s !== nm) : [...selected, nm]);
+  };
+
+  const label = selected.length === 0 ? placeholder : selected.join(", ");
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button type="button" onClick={() => setOpen(o => !o)}
+        style={{ width:"100%", padding:"8px 12px", border:"1px solid #CBD5E1", borderRadius:"7px",
+          backgroundColor:"#fff", fontSize:"13px", color: selected.length ? "#1E293B" : "#94A3B8",
+          textAlign:"left", cursor:"pointer", fontFamily:"'Pretendard', sans-serif",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:"8px" }}>
+        <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>{label}</span>
+        <span style={{ fontSize:"10px", color:"#94A3B8", flexShrink:0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, right:0, zIndex:200,
+          backgroundColor:"#fff", border:"1px solid #E2E8F0", borderRadius:"8px",
+          boxShadow:"0 4px 16px rgba(0,0,0,0.12)", maxHeight:"200px", overflowY:"auto" }}>
+          {systems.length === 0
+            ? <p style={{ margin:0, padding:"12px", fontSize:"13px", color:"#94A3B8", textAlign:"center" }}>시스템 없음</p>
+            : systems.map(s => (
+              <label key={s.SYSTEM_NM} style={{ display:"flex", alignItems:"center", gap:"10px",
+                padding:"8px 14px", cursor:"pointer", fontSize:"13px",
+                backgroundColor: selected.includes(s.SYSTEM_NM) ? "#EFF6FF" : "transparent",
+                color: selected.includes(s.SYSTEM_NM) ? "#1D4ED8" : "#1E293B" }}>
+                <input type="checkbox" checked={selected.includes(s.SYSTEM_NM)}
+                  onChange={() => toggle(s.SYSTEM_NM)}
+                  style={{ width:"15px", height:"15px", cursor:"pointer", accentColor:"#2563EB" }} />
+                {s.SYSTEM_NM}
+              </label>
+            ))
+          }
+          {selected.length > 0 && (
+            <div style={{ borderTop:"1px solid #F1F5F9", padding:"6px 14px" }}>
+              <button type="button" onClick={() => onChange([])}
+                style={{ fontSize:"11px", color:"#DC2626", background:"none", border:"none",
+                  cursor:"pointer", fontFamily:"'Pretendard', sans-serif" }}>
+                ✕ 전체 해제
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Badge({ text, styles }) {
   if (!text) return <span style={{ color: "#94A3B8", fontSize: "12px" }}>-</span>;
@@ -511,15 +635,20 @@ function CanvasEditor({ onImageReady, editorWidth = 560 }) {
 /* ══════════════════════════════════════════
    메인 컴포넌트
 ══════════════════════════════════════════ */
-const INIT_REG = { taskId: "", testGubun: "", errGubun: "", level: "", fixRequestDate: "", menuNm: "", menuPath: "", title: "", content: "" };
+const INIT_REG = { taskId: "", testGubun: "", errGubun: "", level: "", fixRequestDate: "", menuNm: "", menuPath: "", title: "", content: "", systemNms: [], managerId: "", relevantUsers: [] };
 const TEST_GUBUN_OPTIONS = ["개발자테스트", "단위테스트", "통합테스트", "MA"];
 
 export default function IssueManagePage() {
   const { user } = useAuth();
 
-  const [tm1List,   setTm1List]   = useState([]);
-  const [userMap,   setUserMap]   = useState({});
-  const [deptUsers, setDeptUsers] = useState([]);
+  const [tm1List,    setTm1List]    = useState([]);
+  const [userMap,    setUserMap]    = useState({});
+  const [deptUsers,  setDeptUsers]  = useState([]);
+  const [systemList,    setSystemList]    = useState([]); // OPERATING_SYSTEM 목록
+  const [showSysReg,    setShowSysReg]    = useState(false);
+  const [newSysNm,      setNewSysNm]      = useState("");
+  const [sysRegSaving,  setSysRegSaving]  = useState(false);
+  const [sysRegErr,     setSysRegErr]     = useState("");
 
   const getToday    = () => new Date().toISOString().split("T")[0];
   const getMonthAgo = () => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().split("T")[0]; };
@@ -530,14 +659,40 @@ export default function IssueManagePage() {
   const [searchTestGubun, setSearchTestGubun] = useState("");
   const [searchErrGubun,  setSearchErrGubun]  = useState("");
   const [searchLevel,     setSearchLevel]     = useState("");
-  const [searchManager,  setSearchManager]  = useState("");
+  const [searchManagers, setSearchManagers] = useState([]);
   const [searchTitle,    setSearchTitle]    = useState("");
-  const [searchComplete, setSearchComplete] = useState("");
+  const [searchComplete,  setSearchComplete]  = useState("");
+  const [searchSystemNms, setSearchSystemNms] = useState([]); // 시스템명 멀티선택
 
   const [rows,       setRows]       = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [searched,   setSearched]   = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [page,       setPage]       = useState(1);
+  const PAGE_SIZE = 20;
+
+  // 컬럼 리사이즈
+  const COL_HEADERS = ["No","프로젝트","테스트구분","오류구분","중요도","시스템명","화면명","이슈제목","완료요청일","완료여부","완료일자","조치담당자","접수자","접수일자","연관담당자","등록일자","등록자"];
+  const COL_INIT_W  = [44,120,100,80,70,100,110,200,90,80,90,90,80,90,120,90,80];
+  const [colWidths, setColWidths] = useState(COL_INIT_W);
+  const resizingCol = useRef(null); // { idx, startX, startW }
+
+  const onResizeMouseDown = useCallback((e, idx) => {
+    e.preventDefault();
+    resizingCol.current = { idx, startX: e.clientX, startW: colWidths[idx] };
+    const onMove = ev => {
+      const delta = ev.clientX - resizingCol.current.startX;
+      const newW  = Math.max(40, resizingCol.current.startW + delta);
+      setColWidths(ws => ws.map((w, i) => i === resizingCol.current.idx ? newW : w));
+    };
+    const onUp = () => {
+      resizingCol.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [colWidths]);
 
   const [showReg,   setShowReg]   = useState(false);
   const [regStep,   setRegStep]   = useState(1);   // 1: 이미지, 2: 폼
@@ -569,10 +724,12 @@ export default function IssueManagePage() {
 
   async function loadMasters() {
     const dept = user?.deptCd;
+
     let q = supabase.from("TASK_MASTER").select("TASK_ID, TASK_NAME").eq("LEVEL","1").order("TASK_NAME");
     if (dept) q = q.eq("DEPT_CD", dept);
     const { data: tm } = await q;
     setTm1List(tm ?? []);
+
     const { data: users } = await supabase.from("SCRUMBOARD_USER").select("ID, NAME, DEPT_CD");
     if (users) {
       const map = {};
@@ -580,10 +737,28 @@ export default function IssueManagePage() {
       setUserMap(map);
       setDeptUsers(dept ? users.filter(u => u.DEPT_CD === dept) : users);
     }
+
+    let sq = supabase.from("OPERATING_SYSTEM").select("SYSTEM_NM, DEPT_CD").order("SYSTEM_NM");
+    if (dept) sq = sq.eq("DEPT_CD", dept);
+    const { data: sys } = await sq;
+    setSystemList(sys ?? []);
+  }
+
+  async function handleSysRegSave() {
+    if (!newSysNm.trim()) { setSysRegErr("시스템명을 입력해주세요."); return; }
+    setSysRegSaving(true); setSysRegErr("");
+    const { error } = await supabase.from("OPERATING_SYSTEM").insert({
+      SYSTEM_NM: newSysNm.trim(),
+      DEPT_CD:   user?.deptCd ?? null,
+    });
+    setSysRegSaving(false);
+    if (error) { setSysRegErr("저장 오류: " + error.message); return; }
+    setNewSysNm(""); setShowSysReg(false);
+    await loadMasters(); // 목록 갱신
   }
 
   async function handleSearch() {
-    setLoading(true); setSearched(true); setSelectedId(null);
+    setLoading(true); setSearched(true); setSelectedId(null); setPage(1);
     let q = supabase.from("SYSTEM_ERRORREPORT").select("*").order("ID", { ascending: false });
     if (searchTask) {
       q = q.eq("TASK_ID", Number(searchTask));
@@ -595,8 +770,9 @@ export default function IssueManagePage() {
     if (searchTestGubun)        q = q.eq("TEST_GUBUN", searchTestGubun);
     if (searchErrGubun)         q = q.eq("ERROR_GUBUN", searchErrGubun);
     if (searchLevel)            q = q.eq("IMPORTANT_LEVEL", searchLevel);
-    if (searchManager)          q = q.eq("MANAGE_ID", searchManager);
+    if (searchManagers.length)  q = q.in("MANAGE_ID", searchManagers);
     if (searchTitle.trim())     q = q.ilike("ERROR_TITLE", `%${searchTitle.trim()}%`);
+    if (searchSystemNms.length) q = q.or(searchSystemNms.map(s => `SYSTEM_NM.ilike.%${s}%`).join(","));
     if (searchComplete === "Y") q = q.eq("COMPLETE_YN", "Y");
     if (searchComplete === "N") q = q.or("COMPLETE_YN.eq.N,COMPLETE_YN.is.null");
     const { data, error } = await q;
@@ -607,8 +783,8 @@ export default function IssueManagePage() {
 
   function handleReset() {
     setSearchTask(""); setSearchFrom(getMonthAgo()); setSearchTo(getToday());
-    setSearchTestGubun(""); setSearchErrGubun(""); setSearchLevel(""); setSearchManager("");
-    setSearchTitle(""); setSearchComplete(""); setRows([]); setSearched(false); setSelectedId(null);
+    setSearchTestGubun(""); setSearchErrGubun(""); setSearchLevel(""); setSearchManagers([]);
+    setSearchTitle(""); setSearchComplete(""); setSearchSystemNms([]); setRows([]); setSearched(false); setSelectedId(null);
   }
 
   async function handleRegSave() {
@@ -635,20 +811,27 @@ export default function IssueManagePage() {
     }
 
     const now = new Date().toISOString();
+    const relevantNm = regForm.relevantUsers.length > 0
+      ? regForm.relevantUsers.map(id => userMap[id] ?? id).join(",")
+      : null;
     const { error } = await supabase.from("SYSTEM_ERRORREPORT").insert({
-      TASK_ID:          regForm.taskId,
-      TEST_GUBUN:       regForm.testGubun || null,
-      ERROR_GUBUN:      regForm.errGubun,
-      IMPORTANT_LEVEL:  regForm.level,
-      FIX_REQUEST_DATE: regForm.fixRequestDate || null,
-      MENU_NM:          regForm.menuNm.trim() || null,
-      MENU_PATH:        regForm.menuPath.trim() || null,
-      ERROR_TITLE:      regForm.title.trim(),
-      ERROR_CONTENT:    regForm.content.trim(),
-      image_url:        imageUrl,
-      INSERT_ID:        user?.id ?? "",
-      INSERT_DT:        now,
-      COMPLETE_YN:      "N",
+      TASK_ID:            Number(regForm.taskId),
+      TEST_GUBUN:         regForm.testGubun || null,
+      ERROR_GUBUN:        regForm.errGubun,
+      IMPORTANT_LEVEL:    regForm.level,
+      FIX_REQUEST_DATE:   regForm.fixRequestDate || null,
+      MENU_NM:            regForm.menuNm.trim() || null,
+      MENU_PATH:          regForm.menuPath.trim() || null,
+      ERROR_TITLE:        regForm.title.trim(),
+      ERROR_CONTENT:      regForm.content.trim(),
+      SYSTEM_NM:          regForm.systemNms.length ? regForm.systemNms.join(",") : null,
+      MANAGE_ID:          regForm.managerId || null,
+      MANAGE_DT:          regForm.managerId ? now : null,
+      RELEVANT_USER_NM:   relevantNm,
+      image_url:          imageUrl,
+      INSERT_ID:          user?.id ?? "",
+      INSERT_DT:          now,
+      COMPLETE_YN:        "N",
     });
     setRegSaving(false);
     if (error) { alert("등록 오류: " + error.message); return; }
@@ -705,16 +888,21 @@ export default function IssueManagePage() {
 
     const id = rowId ?? selectedId;
     setEditSaving(true);
+    const editRelevantNm = editForm.relevantUsers.length > 0
+      ? editForm.relevantUsers.map(uid => userMap[uid] ?? uid).join(",")
+      : null;
     const { error } = await supabase.from("SYSTEM_ERRORREPORT").update({
-      TASK_ID:          editForm.taskId,
-      TEST_GUBUN:       editForm.testGubun || null,
-      ERROR_GUBUN:      editForm.errGubun,
-      IMPORTANT_LEVEL:  editForm.level,
-      FIX_REQUEST_DATE: editForm.fixRequestDate || null,
-      MENU_NM:          editForm.menuNm.trim() || null,
-      MENU_PATH:        editForm.menuPath.trim() || null,
-      ERROR_TITLE:      editForm.title.trim(),
-      ERROR_CONTENT:    editForm.content.trim(),
+      TASK_ID:            Number(editForm.taskId),
+      TEST_GUBUN:         editForm.testGubun || null,
+      ERROR_GUBUN:        editForm.errGubun,
+      IMPORTANT_LEVEL:    editForm.level,
+      FIX_REQUEST_DATE:   editForm.fixRequestDate || null,
+      MENU_NM:            editForm.menuNm.trim() || null,
+      MENU_PATH:          editForm.menuPath.trim() || null,
+      ERROR_TITLE:        editForm.title.trim(),
+      ERROR_CONTENT:      editForm.content.trim(),
+      SYSTEM_NM:          editForm.systemNms && editForm.systemNms.length ? editForm.systemNms.join(",") : null,
+      RELEVANT_USER_NM:   editRelevantNm,
     }).eq("ID", id);
     setEditSaving(false);
     if (error) { alert("수정 오류: " + error.message); return; }
@@ -740,6 +928,49 @@ export default function IssueManagePage() {
     handleSearch();
   }
 
+  function handleExcelExport() {
+    if (!rows.length) { alert("조회된 데이터가 없습니다."); return; }
+
+    const excelData = rows.map((r, idx) => ({
+      "No":         idx + 1,
+      "시스템명":    r.SYSTEM_NM     ?? "",
+      "테스트구분":  r.TEST_GUBUN    ?? "",
+      "오류구분":    r.ERROR_GUBUN   ?? "",
+      "중요도":      r.IMPORTANT_LEVEL ?? "",
+      "화면명":      r.MENU_NM       ?? "",
+      "이슈제목":    r.ERROR_TITLE   ?? "",
+      "완료요청일":  r.FIX_REQUEST_DATE ? String(r.FIX_REQUEST_DATE).slice(0, 10) : "",
+      "등록자":      userMap[r.INSERT_ID] ?? r.INSERT_ID ?? "",
+      "접수자":      userMap[r.MANAGE_ID] ?? r.MANAGE_ID ?? "",
+      "연관담당자":  r.RELEVANT_USER_NM ?? "",
+      "오류내용":    r.ERROR_CONTENT  ?? "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    /* 컬럼 너비 설정 */
+    ws["!cols"] = [
+      { wch: 5  }, // No
+      { wch: 16 }, // 시스템명
+      { wch: 14 }, // 테스트구분
+      { wch: 10 }, // 오류구분
+      { wch: 8  }, // 중요도
+      { wch: 20 }, // 화면명
+      { wch: 40 }, // 이슈제목
+      { wch: 12 }, // 완료요청일
+      { wch: 10 }, // 등록자
+      { wch: 10 }, // 접수자
+      { wch: 20 }, // 연관담당자
+      { wch: 60 }, // 오류내용
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "이슈목록");
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    XLSX.writeFile(wb, `이슈목록_${today}.xlsx`);
+  }
+
   const taskNameMap = Object.fromEntries(tm1List.map(t => [String(t.TASK_ID), t.TASK_NAME]));
   const selectedRow = rows.find(r => r.ID === selectedId);
   const canAccept   = selectedId && selectedRow && !selectedRow.MANAGE_ID;
@@ -762,6 +993,10 @@ export default function IssueManagePage() {
     }
 
     const openDetailEdit = () => {
+      // RELEVANT_USER_NM(콤마 구분 이름) → 현재 deptUsers에서 ID 역매핑
+      const nameToId = Object.fromEntries(deptUsers.map(u => [u.NAME, u.ID]));
+      const existingNames = d.RELEVANT_USER_NM ? d.RELEVANT_USER_NM.split(",").map(n => n.trim()) : [];
+      const existingIds = existingNames.map(n => nameToId[n]).filter(Boolean);
       setEditForm({
         taskId:         String(d.TASK_ID ?? ""),
         testGubun:      d.TEST_GUBUN ?? "",
@@ -772,6 +1007,8 @@ export default function IssueManagePage() {
         menuPath:       d.MENU_PATH ?? "",
         title:          d.ERROR_TITLE ?? "",
         content:        d.ERROR_CONTENT ?? "",
+        systemNms:      d.SYSTEM_NM ? d.SYSTEM_NM.split(",").map(s => s.trim()).filter(Boolean) : [],
+        relevantUsers:  existingIds,
       });
       setEditErr({});
       setShowEdit(true);
@@ -892,10 +1129,12 @@ export default function IssueManagePage() {
                       {isComplete ? "✓ 완료" : "⏳ 미완료"}
                     </span>
                   } />
-                  <DetailItem label="등록자"   value={userMap[d.INSERT_ID] ?? d.INSERT_ID ?? "-"} />
-                  <DetailItem label="등록일자" value={formatDate(d.INSERT_DT)} />
-                  <DetailItem label="접수자"   value={userMap[d.MANAGE_ID] ?? d.MANAGE_ID ?? "-"} />
-                  <DetailItem label="접수일자" value={formatDate(d.MANAGE_DT)} />
+                  <DetailItem label="시스템명"   value={d.SYSTEM_NM || "-"} />
+                  <DetailItem label="연관담당자" value={d.RELEVANT_USER_NM || "-"} />
+                  <DetailItem label="등록자"    value={userMap[d.INSERT_ID] ?? d.INSERT_ID ?? "-"} />
+                  <DetailItem label="등록일자"  value={formatDate(d.INSERT_DT)} />
+                  <DetailItem label="접수자"    value={userMap[d.MANAGE_ID] ?? d.MANAGE_ID ?? "-"} />
+                  <DetailItem label="접수일자"  value={formatDate(d.MANAGE_DT)} />
                 </div>
               </div>
             </div>
@@ -1092,6 +1331,14 @@ export default function IssueManagePage() {
                   <input type="date" style={{ ...im.input, width:"100%" }}
                     value={editForm.fixRequestDate} onChange={e => setEditForm(f => ({ ...f, fixRequestDate: e.target.value }))} />
                 </div>
+                <div style={im.formRow}>
+                  <label style={im.formLabel}>시스템명 <span style={{ fontSize:"11px", color:"#94A3B8", fontWeight:"400" }}>(복수선택 가능)</span></label>
+                  <MultiSystemSelect
+                    systems={systemList}
+                    selected={editForm.systemNms ?? []}
+                    onChange={vals => setEditForm(f => ({ ...f, systemNms: vals }))}
+                  />
+                </div>
                 <div style={{ display:"flex", gap:"12px" }}>
                   <div style={{ ...im.formRow, flex:1 }}>
                     <label style={im.formLabel}>화면명</label>
@@ -1103,6 +1350,14 @@ export default function IssueManagePage() {
                     <input style={{ ...im.input, width:"100%" }} placeholder="예) 메인 > 프로젝트 리포트 > 이슈관리"
                       value={editForm.menuPath} onChange={e => setEditForm(f => ({ ...f, menuPath: e.target.value }))} />
                   </div>
+                </div>
+                <div style={im.formRow}>
+                  <label style={im.formLabel}>연관 담당자 <span style={{ fontSize:"11px", color:"#94A3B8", fontWeight:"400" }}>(멀티선택)</span></label>
+                  <MultiUserSelect
+                    users={deptUsers}
+                    selected={editForm.relevantUsers ?? []}
+                    onChange={ids => setEditForm(f => ({ ...f, relevantUsers: ids }))}
+                  />
                 </div>
                 <div style={im.formRow}>
                   <label style={im.formLabel}>제목 <span style={{ color:"#DC2626" }}>*</span></label>
@@ -1180,14 +1435,25 @@ export default function IssueManagePage() {
               <option value="중">중</option><option value="하">하</option>
             </select>
           </div>
-          <div style={{ ...im.field, width:"110px" }}>
-            <label style={im.label}>담당자</label>
-            <select style={im.select} value={searchManager} onChange={e => setSearchManager(e.target.value)}>
-              <option value="">전체</option>
-              {deptUsers.map(u => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
-            </select>
+          <div style={{ ...im.field, width:"160px" }}>
+            <label style={im.label}>접수자</label>
+            <MultiUserSelect
+              users={deptUsers}
+              selected={searchManagers}
+              onChange={setSearchManagers}
+              placeholder="전체"
+            />
           </div>
-          <div style={{ ...im.field, width:"320px" }}>
+          <div style={{ ...im.field, width:"180px" }}>
+            <label style={im.label}>시스템명</label>
+            <MultiSystemSelect
+              systems={systemList}
+              selected={searchSystemNms}
+              onChange={setSearchSystemNms}
+              placeholder="전체"
+            />
+          </div>
+          <div style={{ ...im.field, width:"280px" }}>
             <label style={im.label}>이슈제목</label>
             <input style={im.input} placeholder="이슈 제목 검색..."
               value={searchTitle} onChange={e => setSearchTitle(e.target.value)}
@@ -1213,6 +1479,13 @@ export default function IssueManagePage() {
 
       {/* 액션 버튼 */}
       <div style={{ display:"flex", gap:"8px", marginBottom:"10px", justifyContent:"flex-end" }}>
+        <button
+          style={{ ...im.actionBtn, backgroundColor:"#16A34A" }}
+          onClick={handleExcelExport}
+          disabled={!rows.length}
+          title={rows.length ? `${rows.length}건 Excel 다운로드` : "먼저 조회하세요"}>
+          📥 Excel 변환
+        </button>
         <button style={im.actionBtn} onClick={() => { setRegForm(INIT_REG); setRegErr({}); setImageBlob(null); setRegStep(1); setShowReg(true); }}>
           + 이슈등록
         </button>
@@ -1225,34 +1498,81 @@ export default function IssueManagePage() {
         <div style={im.emptyBox}><p style={im.emptyText}>데이터를 불러오는 중입니다...</p></div>
       ) : rows.length === 0 ? (
         <div style={im.emptyBox}><span style={{ fontSize:"36px" }}>📭</span><p style={im.emptyText}>조회된 데이터가 없습니다.</p></div>
-      ) : (
-        <div style={im.tableWrap}>
-          <table style={im.table}>
+      ) : (() => {
+        const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+        const pageRows   = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+        /* 페이지 번호 목록 (최대 5개 표시) */
+        const pageNums = [];
+        const half = 2;
+        let start = Math.max(1, page - half);
+        let end   = Math.min(totalPages, start + 4);
+        if (end - start < 4) start = Math.max(1, end - 4);
+        for (let i = start; i <= end; i++) pageNums.push(i);
+
+        const pgBtn = (label, target, disabled) => (
+          <button key={label} onClick={() => setPage(target)} disabled={disabled}
+            style={{ minWidth:"34px", height:"34px", padding:"0 8px", borderRadius:"7px",
+              border: target === page ? "none" : "1px solid #CBD5E1",
+              backgroundColor: target === page ? "#1E293B" : disabled ? "#F8FAFC" : "#fff",
+              color: target === page ? "#fff" : disabled ? "#CBD5E1" : "#475569",
+              fontSize:"13px", fontWeight: target === page ? "700" : "500",
+              cursor: disabled ? "not-allowed" : "pointer",
+              fontFamily:"'Pretendard', sans-serif" }}>
+            {label}
+          </button>
+        );
+
+        return (
+          <>
+            <div style={im.tableWrap}>
+              <table style={{ ...im.table, tableLayout:"fixed" }}>
+            <colgroup>
+              {colWidths.map((w, i) => <col key={i} style={{ width:`${w}px`, minWidth:`${w}px` }} />)}
+            </colgroup>
             <thead>
               <tr>
-                {["No","프로젝트","테스트구분","오류구분","중요도","화면명","이슈제목","완료요청일","완료여부","완료일자","조치담당자","접수자","접수일자","등록일자","등록자"].map(h => (
-                  <th key={h} style={im.th}>{h}</th>
+                {COL_HEADERS.map((h, i) => (
+                  <th key={h} style={{ ...im.th, position:"relative", width:`${colWidths[i]}px`,
+                    userSelect:"none", overflow:"hidden", whiteSpace:"nowrap" }}>
+                    {h}
+                    {/* 리사이즈 핸들 */}
+                    <span
+                      onMouseDown={e => onResizeMouseDown(e, i)}
+                      style={{ position:"absolute", right:0, top:0, bottom:0, width:"5px",
+                        cursor:"col-resize", zIndex:1,
+                        backgroundColor:"transparent",
+                        borderRight:"2px solid transparent",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.borderRightColor = "#2563EB"}
+                      onMouseLeave={e => e.currentTarget.style.borderRightColor = "transparent"}
+                    />
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, idx) => {
+              {pageRows.map((row, idx) => {
                 const isComplete = row.COMPLETE_YN === "Y";
                 const isSelected = row.ID === selectedId;
+                const absIdx = (page - 1) * PAGE_SIZE + idx;
                 return (
                   <tr key={row.ID} onClick={() => setSelectedId(isSelected ? null : row.ID)}
                     style={{ ...im.tr, backgroundColor: isSelected ? "#EFF6FF" : idx%2===0 ? "#FFFFFF" : "#F8FAFC", cursor:"pointer", outline: isSelected ? "2px solid #2563EB" : "none" }}>
-                    <td style={{ ...im.td, textAlign:"center", color:"#94A3B8", width:"44px" }}>{idx+1}</td>
-                    <td style={{ ...im.td, fontWeight:"600", color:"#1E293B", maxWidth:"120px" }}>
+                    <td style={{ ...im.td, textAlign:"center", color:"#94A3B8", overflow:"hidden" }}>{absIdx + 1}</td>
+                    <td style={{ ...im.td, fontWeight:"600", color:"#1E293B", overflow:"hidden" }}>
                       <span style={im.ellipsis} title={taskNameMap[String(row.TASK_ID)]}>{taskNameMap[String(row.TASK_ID)] ?? "-"}</span>
                     </td>
-                    <td style={{ ...im.td, textAlign:"center", color:"#64748B", fontSize:"12px" }}>{row.TEST_GUBUN || "-"}</td>
-                    <td style={{ ...im.td, textAlign:"center" }}><Badge text={row.ERROR_GUBUN} styles={ERROR_GUBUN_STYLE} /></td>
-                    <td style={{ ...im.td, textAlign:"center" }}><Badge text={row.IMPORTANT_LEVEL} styles={LEVEL_STYLE} /></td>
-                    <td style={{ ...im.td, maxWidth:"120px" }}>
+                    <td style={{ ...im.td, textAlign:"center", color:"#64748B", fontSize:"12px", overflow:"hidden" }}>{row.TEST_GUBUN || "-"}</td>
+                    <td style={{ ...im.td, textAlign:"center", overflow:"hidden" }}><Badge text={row.ERROR_GUBUN} styles={ERROR_GUBUN_STYLE} /></td>
+                    <td style={{ ...im.td, textAlign:"center", overflow:"hidden" }}><Badge text={row.IMPORTANT_LEVEL} styles={LEVEL_STYLE} /></td>
+                    <td style={{ ...im.td, overflow:"hidden" }}>
+                      <span style={im.ellipsis} title={row.SYSTEM_NM}>{row.SYSTEM_NM || "-"}</span>
+                    </td>
+                    <td style={{ ...im.td, overflow:"hidden" }}>
                       <span style={im.ellipsis} title={row.MENU_NM}>{row.MENU_NM || "-"}</span>
                     </td>
-                    <td style={{ ...im.td, maxWidth:"200px" }}>
+                    <td style={{ ...im.td, overflow:"hidden" }}>
                       <span
                         style={{ ...im.ellipsis, color:"#2563EB", cursor:"pointer", textDecoration:"underline", textUnderlineOffset:"2px" }}
                         title={row.ERROR_TITLE}
@@ -1268,16 +1588,36 @@ export default function IssueManagePage() {
                     <td style={{ ...im.td, textAlign:"center", color:"#64748B" }}>{formatDate(row.FIX_DATE)}</td>
                     <td style={{ ...im.td, textAlign:"center" }}>{userMap[row.FIX_ID] ?? (row.FIX_ID || "-")}</td>
                     <td style={{ ...im.td, textAlign:"center" }}>{userMap[row.MANAGE_ID] ?? (row.MANAGE_ID||"-")}</td>
-                    <td style={{ ...im.td, textAlign:"center", color:"#64748B" }}>{formatDate(row.MANAGE_DT)}</td>
-                    <td style={{ ...im.td, textAlign:"center", color:"#64748B" }}>{formatDate(row.INSERT_DT)}</td>
-                    <td style={{ ...im.td, textAlign:"center" }}>{userMap[row.INSERT_ID] ?? row.INSERT_ID ?? "-"}</td>
+                    <td style={{ ...im.td, textAlign:"center", color:"#64748B", overflow:"hidden" }}>{formatDate(row.MANAGE_DT)}</td>
+                    <td style={{ ...im.td, overflow:"hidden" }}>
+                      <span style={im.ellipsis} title={row.RELEVANT_USER_NM}>{row.RELEVANT_USER_NM || "-"}</span>
+                    </td>
+                    <td style={{ ...im.td, textAlign:"center", color:"#64748B", overflow:"hidden" }}>{formatDate(row.INSERT_DT)}</td>
+                    <td style={{ ...im.td, textAlign:"center", overflow:"hidden" }}>{userMap[row.INSERT_ID] ?? row.INSERT_ID ?? "-"}</td>
                   </tr>
                 );
               })}
             </tbody>
-          </table>
-        </div>
-      )}
+              </table>
+            </div>
+
+            {/* 페이지네이션 */}
+            {totalPages > 1 && (
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
+                gap:"4px", padding:"16px 0 4px" }}>
+                {pgBtn("«", 1, page === 1)}
+                {pgBtn("‹", page - 1, page === 1)}
+                {pageNums.map(n => pgBtn(n, n, false))}
+                {pgBtn("›", page + 1, page === totalPages)}
+                {pgBtn("»", totalPages, page === totalPages)}
+                <span style={{ marginLeft:"12px", fontSize:"12px", color:"#94A3B8" }}>
+                  {(page-1)*PAGE_SIZE + 1}–{Math.min(page*PAGE_SIZE, rows.length)} / 총 {rows.length}건
+                </span>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ── 이슈등록 모달 (2-Step) ── */}
       {showReg && (() => {
@@ -1444,6 +1784,66 @@ export default function IssueManagePage() {
                         </div>
                       </div>
 
+                      {/* 시스템명 */}
+                      <div style={im.formRow}>
+                        <label style={im.formLabel}>시스템명 <span style={{ fontSize:"11px", color:"#94A3B8", fontWeight:"400" }}>(복수선택 가능)</span></label>
+                        <div style={{ display:"flex", gap:"6px" }}>
+                          <div style={{ flex:1 }}>
+                            <MultiSystemSelect
+                              systems={systemList}
+                              selected={regForm.systemNms}
+                              onChange={vals => setRegForm(f => ({ ...f, systemNms: vals }))}
+                            />
+                          </div>
+                          <button type="button"
+                            onClick={() => { setNewSysNm(""); setSysRegErr(""); setShowSysReg(true); }}
+                            style={{ padding:"0 14px", border:"1px solid #2563EB", borderRadius:"7px",
+                              backgroundColor:"#EFF6FF", color:"#2563EB", fontSize:"13px", fontWeight:"700",
+                              cursor:"pointer", flexShrink:0, whiteSpace:"nowrap",
+                              fontFamily:"'Pretendard', sans-serif" }}>
+                            + 등록
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 시스템 등록 인라인 팝업 */}
+                      {showSysReg && (
+                        <div style={{ backgroundColor:"#F0F9FF", border:"1px solid #BAE6FD",
+                          borderRadius:"10px", padding:"14px 16px",
+                          display:"flex", flexDirection:"column", gap:"10px" }}>
+                          <p style={{ margin:0, fontSize:"13px", fontWeight:"700", color:"#0369A1" }}>
+                            새 시스템 등록
+                          </p>
+                          <div style={{ display:"flex", gap:"8px", alignItems:"flex-start" }}>
+                            <div style={{ flex:1 }}>
+                              <input
+                                style={{ ...im.input, width:"100%", boxSizing:"border-box" }}
+                                placeholder="시스템명을 입력하세요"
+                                value={newSysNm}
+                                onChange={e => { setNewSysNm(e.target.value); setSysRegErr(""); }}
+                                onKeyDown={e => e.key === "Enter" && handleSysRegSave()}
+                                autoFocus
+                              />
+                              {sysRegErr && <span style={im.errMsg}>{sysRegErr}</span>}
+                            </div>
+                            <button type="button" onClick={handleSysRegSave} disabled={sysRegSaving}
+                              style={{ padding:"8px 18px", border:"none", borderRadius:"7px",
+                                backgroundColor: sysRegSaving ? "#CBD5E1" : "#2563EB",
+                                color:"#fff", fontSize:"13px", fontWeight:"600",
+                                cursor: sysRegSaving ? "not-allowed" : "pointer",
+                                fontFamily:"'Pretendard', sans-serif", flexShrink:0 }}>
+                              {sysRegSaving ? "저장 중..." : "저장"}
+                            </button>
+                            <button type="button" onClick={() => setShowSysReg(false)}
+                              style={{ padding:"8px 12px", border:"1px solid #E2E8F0", borderRadius:"7px",
+                                backgroundColor:"#fff", color:"#64748B", fontSize:"13px",
+                                cursor:"pointer", fontFamily:"'Pretendard', sans-serif", flexShrink:0 }}>
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* 완료요청일자 / 화면명 / 화면경로 */}
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"14px" }}>
                         <div style={im.formRow}>
@@ -1461,6 +1861,26 @@ export default function IssueManagePage() {
                           <label style={im.formLabel}>화면 경로</label>
                           <input style={{ ...im.input, width:"100%" }} placeholder="예) 메인 > 이슈관리"
                             value={regForm.menuPath} onChange={e => setRegForm(f => ({ ...f, menuPath: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      {/* 접수자 / 연관담당자 */}
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"14px" }}>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>접수자</label>
+                          <select style={{ ...im.select, width:"100%" }}
+                            value={regForm.managerId} onChange={e => setRegForm(f => ({ ...f, managerId: e.target.value }))}>
+                            <option value="">선택 안함</option>
+                            {deptUsers.map(u => <option key={u.ID} value={u.ID}>{u.NAME}</option>)}
+                          </select>
+                        </div>
+                        <div style={im.formRow}>
+                          <label style={im.formLabel}>연관 담당자 <span style={{ fontSize:"11px", color:"#94A3B8", fontWeight:"400" }}>(멀티선택)</span></label>
+                          <MultiUserSelect
+                            users={deptUsers}
+                            selected={regForm.relevantUsers}
+                            onChange={ids => setRegForm(f => ({ ...f, relevantUsers: ids }))}
+                          />
                         </div>
                       </div>
 
@@ -1546,11 +1966,11 @@ const im = {
   actionBtn:  { padding:"8px 18px", border:"none", borderRadius:"8px", backgroundColor:"#1E293B", color:"#fff", fontSize:"13px", fontWeight:"600", cursor:"pointer", fontFamily:"'Pretendard', sans-serif" },
   emptyBox:   { backgroundColor:"#FFFFFF", border:"1px solid #E2E8F0", borderRadius:"12px", padding:"60px 24px", textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:"12px" },
   emptyText:  { fontSize:"14px", color:"#94A3B8", margin:0 },
-  tableWrap:  { backgroundColor:"#FFFFFF", border:"1px solid #E2E8F0", borderRadius:"12px", overflow:"auto", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" },
+  tableWrap:  { backgroundColor:"#FFFFFF", border:"1px solid #D1D5DB", borderRadius:"12px", overflow:"auto", boxShadow:"0 2px 8px rgba(0,0,0,0.07)" },
   table:      { width:"100%", borderCollapse:"collapse", minWidth:"1000px" },
-  th:         { padding:"11px 12px", textAlign:"left", fontSize:"12px", fontWeight:"700", color:"#475569", backgroundColor:"#F8FAFC", borderBottom:"1px solid #E2E8F0", whiteSpace:"nowrap" },
-  tr:         { borderBottom:"1px solid #F1F5F9", transition:"background 0.1s" },
-  td:         { padding:"11px 12px", fontSize:"13px", color:"#334155", verticalAlign:"middle" },
+  th:         { padding:"11px 12px", textAlign:"left", fontSize:"12px", fontWeight:"700", color:"#475569", backgroundColor:"#F8FAFC", borderBottom:"1.5px solid #D1D5DB", borderRight:"1px solid #E9EAEC", whiteSpace:"nowrap" },
+  tr:         { borderBottom:"1px solid #EAECEF", transition:"background 0.1s" },
+  td:         { padding:"11px 12px", fontSize:"13px", color:"#334155", verticalAlign:"middle", borderRight:"1px solid #F0F1F3" },
   ellipsis:   { display:"block", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" },
   overlay:    { position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.5)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:"20px" },
   modal:      { backgroundColor:"#fff", borderRadius:"14px", width:"96vw", maxWidth:"1400px", height:"92vh", display:"flex", flexDirection:"column", boxShadow:"0 8px 40px rgba(0,0,0,0.22)", overflow:"hidden" },
