@@ -672,8 +672,8 @@ export default function IssueManagePage() {
   const PAGE_SIZE = 20;
 
   // 컬럼 리사이즈
-  const COL_HEADERS = ["No","프로젝트","테스트구분","오류구분","중요도","시스템명","화면명","이슈제목","완료요청일","완료여부","완료일자","조치담당자","접수자","접수일자","연관담당자","등록일자","등록자"];
-  const COL_INIT_W  = [44,120,100,80,70,100,110,200,90,80,90,90,80,90,120,90,80];
+  const COL_HEADERS = ["ID","프로젝트","테스트구분","오류구분","중요도","시스템명","화면명","이슈제목","완료요청일","완료여부","완료일자","조치담당자","접수자","접수일자","연관담당자","등록일자","등록자"];
+  const COL_INIT_W  = [55,120,100,80,70,100,110,200,90,80,90,90,80,90,120,90,80];
   const [colWidths, setColWidths] = useState(COL_INIT_W);
   const resizingCol = useRef(null); // { idx, startX, startW }
 
@@ -931,8 +931,8 @@ export default function IssueManagePage() {
   function handleExcelExport() {
     if (!rows.length) { alert("조회된 데이터가 없습니다."); return; }
 
-    const excelData = rows.map((r, idx) => ({
-      "No":         idx + 1,
+    const excelData = rows.map((r) => ({
+      "ID":         r.ID            ?? "",
       "시스템명":    r.SYSTEM_NM     ?? "",
       "테스트구분":  r.TEST_GUBUN    ?? "",
       "오류구분":    r.ERROR_GUBUN   ?? "",
@@ -950,7 +950,7 @@ export default function IssueManagePage() {
 
     /* 컬럼 너비 설정 */
     ws["!cols"] = [
-      { wch: 5  }, // No
+      { wch: 8  }, // ID
       { wch: 16 }, // 시스템명
       { wch: 14 }, // 테스트구분
       { wch: 10 }, // 오류구분
@@ -1116,6 +1116,7 @@ export default function IssueManagePage() {
               </div>
               <div style={{ padding:"16px 20px" }}>
                 <div style={detailGrid}>
+                  <DetailItem label="ID"         value={d.ID ?? "-"} bold />
                   <DetailItem label="프로젝트"   value={taskNameMap[String(d.TASK_ID)] ?? "-"} bold />
                   <DetailItem label="테스트구분" value={d.TEST_GUBUN || "-"} />
                   <DetailItem label="오류구분"   value={<Badge text={d.ERROR_GUBUN} styles={ERROR_GUBUN_STYLE} />} />
@@ -1559,7 +1560,7 @@ export default function IssueManagePage() {
                 return (
                   <tr key={row.ID} onClick={() => setSelectedId(isSelected ? null : row.ID)}
                     style={{ ...im.tr, backgroundColor: isSelected ? "#EFF6FF" : idx%2===0 ? "#FFFFFF" : "#F8FAFC", cursor:"pointer", outline: isSelected ? "2px solid #2563EB" : "none" }}>
-                    <td style={{ ...im.td, textAlign:"center", color:"#94A3B8", overflow:"hidden" }}>{absIdx + 1}</td>
+                    <td style={{ ...im.td, textAlign:"center", color:"#64748B", fontWeight:"600", overflow:"hidden" }}>{row.ID}</td>
                     <td style={{ ...im.td, fontWeight:"600", color:"#1E293B", overflow:"hidden" }}>
                       <span style={im.ellipsis} title={taskNameMap[String(row.TASK_ID)]}>{taskNameMap[String(row.TASK_ID)] ?? "-"}</span>
                     </td>
