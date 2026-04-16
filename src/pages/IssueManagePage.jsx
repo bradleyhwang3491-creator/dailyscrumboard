@@ -810,9 +810,17 @@ export default function IssueManagePage() {
     setLoading(true); setSearched(true); setSelectedId(null); setPage(1);
     let q = supabase.from("SYSTEM_ERRORREPORT").select("*").order("ID", { ascending: false });
     if (searchTask) {
+      // 특정 업무구분 선택: 해당 TASK_ID만 조회
       q = q.eq("TASK_ID", Number(searchTask));
-    } else if (tm1List.length > 0) {
-      q = q.in("TASK_ID", tm1List.map(t => t.TASK_ID));
+    } else {
+      // 전체 선택: 내 부서 TASK_ID 필터 (1차) + INSERT_ID 필터 (2차 - 타 부서 원천 차단)
+      if (tm1List.length > 0) {
+        q = q.in("TASK_ID", tm1List.map(t => t.TASK_ID));
+      }
+      const deptIds = deptUsers.map(u => u.ID);
+      if (deptIds.length > 0) {
+        q = q.in("INSERT_ID", deptIds);
+      }
     }
     if (searchFrom)             q = q.gte("INSERT_DT", searchFrom);
     if (searchTo)               q = q.lte("INSERT_DT", searchTo);
