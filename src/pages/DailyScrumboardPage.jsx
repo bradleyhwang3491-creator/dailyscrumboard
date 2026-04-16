@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useBreakpoint } from "../hooks/useBreakpoint";
@@ -96,6 +96,9 @@ function DailyScrumboardPage() {
   const [regForm,     setRegForm]     = useState(INIT_FORM);
   const [regErrors,   setRegErrors]   = useState({});
   const [regLoading,  setRegLoading]  = useState(false);
+
+  // IT 센터 의뢰건 등록 모달
+  const [isITOpen,    setIsITOpen]    = useState(false);
 
   // 상세/수정 모달
   const [detailTask,   setDetailTask]  = useState(null);
@@ -652,6 +655,7 @@ function DailyScrumboardPage() {
         <div style={{ display: "flex", gap: "8px" }}>
           <button style={s.tm1ListBtn} onClick={() => setShowTm1Modal(true)}>{t("daily.tm1ListBtn")}</button>
           <button style={s.registerBtn} onClick={() => { setRegForm({ ...INIT_FORM, registrantId: user?.id ?? "" }); setIsRegOpen(true); }}>{t("daily.addBtn")}</button>
+          <button style={{ ...s.tm1ListBtn, backgroundColor: "#EFF6FF", color: "#2563EB", borderColor: "#BFDBFE", fontWeight: "600" }} onClick={() => setIsITOpen(true)}>🔗 IT센터 의뢰건</button>
         </div>
       </div>
 
@@ -838,6 +842,11 @@ function DailyScrumboardPage() {
           deptUsers={deptUsers}
           systemList={systemList}
           onSysRegSave={handleSysRegSave} />
+      )}
+
+      {/* IT 센터 의뢰건 등록 모달 */}
+      {isITOpen && (
+        <ITCenterModal onClose={() => setIsITOpen(false)} onRefresh={fetchTasks} />
       )}
 
       {/* 상세/수정 모달 */}
@@ -1747,8 +1756,19 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
           {/* 연관페이지링크 (전체) */}
           <div style={ms.fullRow}>
             <label style={ms.label}>연관페이지링크</label>
-            <input style={inp()} type="text" value={form.relatedLink}
-              placeholder="https://" readOnly={readOnly} onChange={(e) => f("relatedLink", e.target.value)} />
+            <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+              <input style={{ ...inp(), flex:1 }} type="text" value={form.relatedLink}
+                placeholder="https://" readOnly={readOnly} onChange={(e) => f("relatedLink", e.target.value)} />
+              {form.relatedLink?.trim() && (
+                <a href={form.relatedLink.trim()} target="_blank" rel="noopener noreferrer"
+                  style={{ flexShrink:0, display:"inline-flex", alignItems:"center", gap:"4px",
+                    padding:"6px 12px", backgroundColor:"#EFF6FF", border:"1px solid #BFDBFE",
+                    borderRadius:"7px", fontSize:"12px", fontWeight:"600", color:"#2563EB",
+                    textDecoration:"none", whiteSpace:"nowrap" }}>
+                  🔗 바로 연결
+                </a>
+              )}
+            </div>
           </div>
           {/* 작업내용 */}
           <div style={ms.fullRow}>
@@ -1874,6 +1894,433 @@ function TaskModal({ title, form, setForm, errors, tm1, tm2, tm3 = [], tm4 = [],
             <button style={ms.submitBtn} onClick={onSubmit} disabled={submitDisabled}>{submitLabel}</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════ IT 센터 의뢰건 팝업 ═══════════════════════ */
+
+/* 이미지 압축 (OCR.space 무료 1MB 제한 대응) */
+async function compressImageForOcr(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1800;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.src = dataUrl;
+  });
+}
+
+/* OCR.space 무료 API - 한국어 특화, 월 25,000건 무료 */
+async function runOcrSpace(jpegDataUrl) {
+  try {
+    const formData = new FormData();
+    formData.append("base64Image", jpegDataUrl);
+    formData.append("language",          "Kor");
+    formData.append("isOverlayRequired", "false");
+    formData.append("OCREngine",         "2");   // Engine 2: 한국어 정확도 높음
+    formData.append("scale",             "true");
+    formData.append("isTable",           "true");
+
+    const res = await fetch("https://api.ocr.space/parse/image", {
+      method: "POST",
+      headers: { "apikey": "helloworld" },
+      body: formData,
+    });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+
+    const json = await res.json();
+    if (json.IsErroredOnProcessing) {
+      return { ok: false, error: json.ErrorMessage?.[0] ?? "OCR 처리 오류" };
+    }
+    const text = json.ParsedResults?.[0]?.ParsedText ?? "";
+    if (!text.trim()) return { ok: false, error: "텍스트를 인식하지 못했습니다." };
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/* OCR 원본 텍스트 → IT센터 필드 파싱 */
+/* OCR 원본 텍스트 → IT센터 필드 파싱 */
+function parseOcrText(raw) {
+  const result = { 시스템: "", 작성자: "", 제목: "", 내용: "", 완료요청일: "" };
+
+  /* ── 1. 날짜 추출 (완료요청일) ── */
+  const dateNear = raw.match(/완료\s*요청일[^\d]{0,20}(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  const dateAny  = raw.match(/(\d{4})[-./](0?[1-9]|1[0-2])[-./](0?[1-9]|[12]\d|3[01])/);
+  const dm = dateNear || dateAny;
+  if (dm) result.완료요청일 = `${dm[1]}-${dm[2].padStart(2,"0")}-${dm[3].padStart(2,"0")}`;
+
+  /* ── 2. 라인 분리 + 라벨:값 파싱 ── */
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  function splitLV(line) {
+    if (line.includes("\t")) {
+      const idx = line.indexOf("\t");
+      return [line.slice(0, idx).trim(), line.slice(idx + 1).trim()];
+    }
+    // 2개 이상 공백으로 구분 (짧은 라벨만)
+    const m = line.match(/^([가-힣()·\s]{1,12}?)\s{2,}(.+)$/);
+    if (m) return [m[1].trim(), m[2].trim()];
+    return [line.trim(), ""];
+  }
+
+  const MAIN_LABELS = /^(시스템|작성자|승인자|제목|내용|첨부\s*파일|완료\s*요청일|진행\s*상태|요청\s*구분)$/;
+
+  /* ── 3. 특정 라벨 이후 첫 번째 값 추출 ── */
+  function extractFirst(labelRe) {
+    for (let i = 0; i < lines.length; i++) {
+      const [lbl, val] = splitLV(lines[i]);
+      if (labelRe.test(lbl)) {
+        if (val) return val;
+        // 다음 줄에서 값 수집 (다음 메인 라벨 나오면 종료)
+        const parts = [];
+        for (let j = i + 1; j < lines.length; j++) {
+          const [nextLbl] = splitLV(lines[j]);
+          if (MAIN_LABELS.test(nextLbl)) break;
+          parts.push(lines[j]);
+        }
+        return parts.join(" ").trim();
+      }
+    }
+    return "";
+  }
+
+  result.시스템 = extractFirst(/^시스템$/);
+  result.제목   = extractFirst(/^제목$/);
+  result.작성자 = extractFirst(/^작성자$/).split(/\s*[|｜>\/]\s*/)[0].trim();
+
+  /* ── 4. 내용: 내용 라벨 ~ 첨부파일/완료요청일 이전까지 전부 수집 ── */
+  let inContent = false;
+  const contentParts = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const [lbl, val] = splitLV(lines[i]);
+
+    if (/^내용$/.test(lbl)) {
+      inContent = true;
+      if (val) contentParts.push(val);
+      continue;
+    }
+
+    if (inContent) {
+      // 종료 조건: 첨부파일·완료요청일·진행상태가 라벨 또는 줄 어디에든 포함되면 중단
+      const STOP_RE = /첨부\s*파일|완료\s*요청일|진행\s*상태/;
+      if (STOP_RE.test(lbl) || STOP_RE.test(lines[i])) break;
+
+      // 라벨:값 형태면 "[라벨] 값"으로, 아니면 그대로
+      if (val) {
+        contentParts.push(`[${lbl}] ${val}`);
+      } else {
+        contentParts.push(lines[i]);
+      }
+    }
+  }
+
+  result.내용 = contentParts.filter(Boolean).join("\n").trim();
+
+  return result;
+}
+
+function ITCenterModal({ onClose, onRefresh }) {
+  const { user } = useAuth();
+  const [registrant, setRegistrant] = useState("");
+  const [itLink,     setItLink]     = useState("");   // IT센터 의뢰 링크
+  const [imgSrc,     setImgSrc]     = useState(null);
+  const [imgBase64,  setImgBase64]  = useState("");
+  const [imgMime,    setImgMime]    = useState("image/png");
+  const [loading,     setLoading]    = useState(false);
+  const [ocrPct,      setOcrPct]     = useState(0);
+  const [saving,      setSaving]     = useState(false);
+  const [rawOcrText,  setRawOcrText] = useState("");
+  const [showRawOcr,  setShowRawOcr] = useState(false);
+  const [fields,     setFields]     = useState({ 시스템: "", 작성자: "", 제목: "", 내용: "", 완료요청일: "" });
+  const [extracted,  setExtracted]  = useState(false);
+  const [msg,        setMsg]        = useState({ text: "", ok: true });
+  const pasteZoneRef = useRef(null);
+
+  const fieldList = ["시스템", "작성자", "제목", "완료요청일", "내용"];
+
+  /* ── 클립보드 붙여넣기 감지 ── */
+  useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items ?? [];
+      for (const item of items) {
+        if (!item.type.startsWith("image/")) continue;
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = ev.target.result;
+          setImgSrc(dataUrl);
+          const b64 = dataUrl.split(",")[1];
+          setImgBase64(b64);
+          setImgMime(file.type);
+          setExtracted(false);
+          setFields({ 시스템: "", 작성자: "", 제목: "", 내용: "", 완료요청일: "" });
+          setMsg({ text: "✅ 이미지 붙여넣기 완료! '정보 추출' 버튼을 클릭하세요.", ok: true });
+        };
+        reader.readAsDataURL(file);
+        e.preventDefault();
+        break;
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
+  /* ── OCR.space 정보 추출 (무료) ── */
+  async function handleExtract() {
+    if (!imgBase64) { setMsg({ text: "먼저 스크린샷을 붙여넣기(Ctrl+V) 해주세요.", ok: false }); return; }
+    setLoading(true);
+    setOcrPct(0);
+    setMsg({ text: "🔍 이미지 압축 중...", ok: true });
+
+    // 1. 이미지 압축 (1MB 제한 대응)
+    const dataUrl = `data:${imgMime};base64,${imgBase64}`;
+    const compressed = await compressImageForOcr(dataUrl);
+
+    setMsg({ text: "🔍 OCR 서버에 전송 중... (5~10초 소요)", ok: true });
+
+    // 2. OCR.space API 호출
+    const result = await runOcrSpace(compressed);
+    setLoading(false);
+    setOcrPct(0);
+
+    if (!result.ok) { setMsg({ text: `❌ 추출 실패: ${result.error}`, ok: false }); return; }
+
+    // 3. 파싱
+    const parsed = parseOcrText(result.text);
+    setRawOcrText(result.text);   // 원본 텍스트 저장 (디버그용)
+    setFields(parsed);
+    setExtracted(true);
+    setMsg({ text: "✅ 정보 추출 완료! 내용을 확인하고 필요시 수정하세요.", ok: true });
+  }
+
+  /* ── TASK_BOARD INSERT ── */
+  async function handleRegister() {
+    if (!extracted) { setMsg({ text: "먼저 정보를 추출해주세요.", ok: false }); return; }
+    setSaving(true);
+    setMsg({ text: "", ok: true });
+
+    const today8 = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+    const title  = `(IT센터의뢰) ${fields.제목}${fields.작성자 ? ` (요청자 : ${fields.작성자})` : ""}`;
+    // 완료요청일 → YYYYMMDD 변환
+    const dueDate = fields.완료요청일 ? fields.완료요청일.replace(/-/g, "").slice(0, 8) : null;
+
+    const { error } = await supabase.from("TASK_BOARD").insert({
+      TITLE:           title,
+      INSERT_DATE:     today8,
+      ID:              user?.id ?? "",
+      DEPT_CD:         user?.deptCd ?? null,
+      STATUS:          "TODO",
+      IMPORTANT_GUBUN: "중",
+      PAGE_URL:        itLink.trim() || null,
+      TASK_CONTENT:    fields.내용 || null,
+      DUE_EXPECT_DATE: dueDate,
+      ISSUE_COMPLETE_YN: "N",
+    });
+
+    setSaving(false);
+    if (error) {
+      setMsg({ text: `❌ 등록 실패: ${error.message}`, ok: false });
+    } else {
+      setMsg({ text: "✅ TASK_BOARD에 등록되었습니다!", ok: true });
+      if (onRefresh) onRefresh();
+      setTimeout(() => onClose(), 1200);
+    }
+  }
+
+  /* ── 이미지 파일 선택 (대안) ── */
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      setImgSrc(dataUrl);
+      setImgBase64(dataUrl.split(",")[1]);
+      setImgMime(file.type);
+      setExtracted(false);
+      setFields({ 시스템: "", 작성자: "", 제목: "", 내용: "", 완료요청일: "" });
+      setMsg({ text: "✅ 이미지 선택 완료! '정보 추출' 버튼을 클릭하세요.", ok: true });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const resetImage = () => {
+    setImgSrc(null); setImgBase64(""); setExtracted(false);
+    setFields({ 시스템:"", 작성자:"", 제목:"", 내용:"", 완료요청일:"" });
+    setRawOcrText(""); setShowRawOcr(false); setMsg({ text:"", ok:true });
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.55)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ backgroundColor:"#fff", borderRadius:"16px", width:"1080px", maxWidth:"96vw", height:"88vh", display:"flex", flexDirection:"column", boxShadow:"0 12px 40px rgba(0,0,0,0.22)", overflow:"hidden" }}>
+
+        {/* ── 헤더 ── */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 22px", borderBottom:"1px solid #E2E8F0", background:"linear-gradient(135deg,#EFF6FF,#F8FAFC)", flexShrink:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+            <span style={{ fontSize:"20px" }}>🖼️</span>
+            <div>
+              <div style={{ fontSize:"15px", fontWeight:"700", color:"#1E293B" }}>IT 센터 의뢰건 정보 추출</div>
+              <div style={{ fontSize:"11px", color:"#64748B", marginTop:"1px" }}>스크린샷 붙여넣기 → OCR 자동 추출</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:"20px", cursor:"pointer", color:"#94A3B8", lineHeight:1 }}>✕</button>
+        </div>
+
+        {/* ── 바디: 좌(이미지) + 우(추출결과) 2단 ── */}
+        <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
+
+          {/* ── 왼쪽: IT링크 + 이미지 + 추출버튼 ── */}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", padding:"18px 20px", gap:"14px", overflowY:"auto", borderRight:"1px solid #E2E8F0" }}>
+
+            {/* IT센터 링크 */}
+            <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+              <span style={{ fontSize:"12px", fontWeight:"700", color:"#64748B", background:"#F1F5F9", border:"1px solid #E2E8F0", borderRadius:"6px", padding:"3px 8px", width:"76px", textAlign:"center", flexShrink:0 }}>IT센터 링크</span>
+              <input type="text" value={itLink} onChange={e => setItLink(e.target.value)}
+                placeholder="https://it.fursys.com/request/view.do?requestNo=RQ..."
+                style={{ flex:1, padding:"8px 12px", border:"1px solid #CBD5E1", borderRadius:"8px", fontSize:"13px", color:"#1E293B", outline:"none", fontFamily:"inherit" }} />
+            </div>
+
+            {/* 이미지 붙여넣기 영역 */}
+            <div ref={pasteZoneRef}
+              style={{ border: imgSrc ? "2px solid #BFDBFE" : "2px dashed #CBD5E1", borderRadius:"12px",
+                backgroundColor: imgSrc ? "#F0F9FF" : "#FAFAFA", overflow:"hidden", flex:1,
+                minHeight:"180px", display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent: imgSrc ? "flex-start" : "center", position:"relative" }}>
+              {!imgSrc ? (
+                <div style={{ textAlign:"center", padding:"32px 20px" }}>
+                  <div style={{ fontSize:"40px", marginBottom:"12px" }}>📋</div>
+                  <div style={{ fontSize:"15px", fontWeight:"600", color:"#334155", marginBottom:"6px" }}>Ctrl + V 로 스크린샷 붙여넣기</div>
+                  <div style={{ fontSize:"12px", color:"#94A3B8", marginBottom:"16px" }}>IT센터 의뢰건 페이지를 캡처 후 붙여넣기 하세요</div>
+                  <label style={{ display:"inline-block", padding:"7px 16px", backgroundColor:"#fff", border:"1px solid #CBD5E1", borderRadius:"7px", fontSize:"12px", color:"#475569", cursor:"pointer", fontWeight:"500" }}>
+                    또는 파일 선택
+                    <input type="file" accept="image/*" style={{ display:"none" }} onChange={handleFileChange} />
+                  </label>
+                </div>
+              ) : (
+                <div style={{ width:"100%", height:"100%", position:"relative" }}>
+                  <img src={imgSrc} alt="붙여넣은 스크린샷" style={{ width:"100%", height:"100%", display:"block", objectFit:"contain", backgroundColor:"#F8FAFC" }} />
+                  <button onClick={resetImage}
+                    style={{ position:"absolute", top:"8px", right:"8px", background:"rgba(0,0,0,0.5)", color:"#fff", border:"none", borderRadius:"6px", padding:"4px 10px", fontSize:"12px", cursor:"pointer" }}>
+                    ✕ 제거
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 추출 버튼 */}
+            <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+              <button onClick={handleExtract} disabled={loading || !imgSrc}
+                style={{ padding:"11px", background: (loading || !imgSrc) ? "#CBD5E1" : "linear-gradient(135deg,#0F766E,#0D9488)", color:"#fff", border:"none", borderRadius:"10px", fontSize:"14px", fontWeight:"700", cursor: (loading || !imgSrc) ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:"8px" }}>
+                {loading
+                  ? <><span style={{ display:"inline-block", width:"16px", height:"16px", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}></span> OCR 인식 중...</>
+                  : "🔍 텍스트 추출"}
+              </button>
+              {loading && ocrPct > 0 && (
+                <div style={{ height:"6px", backgroundColor:"#E2E8F0", borderRadius:"99px", overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${ocrPct}%`, backgroundColor:"#0D9488", borderRadius:"99px", transition:"width 0.3s ease" }} />
+                </div>
+              )}
+            </div>
+
+            {/* 상태 메시지 */}
+            {msg.text && (
+              <div style={{ padding:"10px 14px", borderRadius:"8px", fontSize:"12px", fontWeight:"500",
+                backgroundColor: msg.ok ? "#F0FDF4" : "#FFF1F2",
+                color: msg.ok ? "#16A34A" : "#DC2626",
+                border: `1px solid ${msg.ok ? "#BBF7D0" : "#FECACA"}` }}>
+                {msg.text}
+              </div>
+            )}
+          </div>
+
+          {/* ── 오른쪽: 추출 결과 ── */}
+          <div style={{ width:"420px", flexShrink:0, display:"flex", flexDirection:"column", backgroundColor:"#F8FAFC", borderLeft:"1px solid #E2E8F0" }}>
+
+            {/* 결과 헤더 */}
+            <div style={{ padding:"12px 18px", backgroundColor:"#EFF6FF", borderBottom:"1px solid #BFDBFE", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:"6px", fontSize:"13px", fontWeight:"700", color:"#1D4ED8" }}>
+                <span>📋</span> 추출 결과
+              </div>
+              {rawOcrText && (
+                <button onClick={() => setShowRawOcr(v => !v)}
+                  style={{ fontSize:"11px", padding:"3px 10px", border:"1px solid #93C5FD", borderRadius:"5px", backgroundColor:"#fff", color:"#2563EB", cursor:"pointer", fontWeight:"600" }}>
+                  {showRawOcr ? "▲ 원본 숨기기" : "▼ 원본 보기"}
+                </button>
+              )}
+            </div>
+
+            {/* 결과 내용 (스크롤) */}
+            <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:"12px" }}>
+
+              {!extracted ? (
+                <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#CBD5E1", gap:"12px", paddingTop:"40px" }}>
+                  <span style={{ fontSize:"40px" }}>📄</span>
+                  <span style={{ fontSize:"13px", textAlign:"center", lineHeight:"1.6" }}>스크린샷을 붙여넣고<br/>텍스트 추출 버튼을 클릭하세요</span>
+                </div>
+              ) : (
+                <>
+                  {/* 원본 OCR (토글) */}
+                  {showRawOcr && rawOcrText && (
+                    <div style={{ backgroundColor:"#F0F9FF", border:"1px solid #BAE6FD", borderRadius:"8px", padding:"12px" }}>
+                      <div style={{ fontSize:"11px", fontWeight:"700", color:"#0369A1", marginBottom:"6px" }}>📄 OCR 원본 텍스트</div>
+                      <textarea readOnly value={rawOcrText} rows={5}
+                        style={{ width:"100%", padding:"6px 8px", border:"1px solid #BAE6FD", borderRadius:"6px",
+                          fontSize:"11px", color:"#334155", backgroundColor:"#fff", resize:"none",
+                          fontFamily:"monospace", lineHeight:"1.5", boxSizing:"border-box" }} />
+                    </div>
+                  )}
+
+                  {/* 필드 목록 */}
+                  {fieldList.map((key) => (
+                    <div key={key} style={{ display:"flex", flexDirection:"column", gap:"4px" }}>
+                      <label style={{ fontSize:"11px", fontWeight:"700", color:"#64748B", textTransform:"uppercase", letterSpacing:"0.04em" }}>
+                        {key === "완료요청일" ? "완료 요청일" : key}
+                      </label>
+                      {key === "내용" ? (
+                        <textarea value={fields[key]} onChange={e => setFields(p => ({ ...p, [key]: e.target.value }))}
+                          rows={8} style={{ width:"100%", padding:"8px 10px", border:"1px solid #CBD5E1", borderRadius:"7px", fontSize:"12px", color:"#1E293B", outline:"none", resize:"vertical", fontFamily:"inherit", lineHeight:"1.6", backgroundColor:"#fff", boxSizing:"border-box" }} />
+                      ) : (
+                        <input type={key === "완료요청일" ? "date" : "text"}
+                          value={fields[key]} onChange={e => setFields(p => ({ ...p, [key]: e.target.value }))}
+                          style={{ width:"100%", padding:"8px 10px", border:"1px solid #CBD5E1", borderRadius:"7px", fontSize:"13px", color:"#1E293B", outline:"none", fontFamily:"inherit", backgroundColor:"#fff", boxSizing:"border-box" }} />
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── 푸터 ── */}
+        <div style={{ padding:"12px 22px", borderTop:"1px solid #E2E8F0", backgroundColor:"#F8FAFC", display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
+          <div style={{ fontSize:"11px", color:"#94A3B8" }}>※ 이미지는 서버에 저장되지 않습니다</div>
+          <div style={{ display:"flex", gap:"8px" }}>
+            <button onClick={onClose} style={{ padding:"8px 20px", border:"1px solid #E2E8F0", borderRadius:"8px", backgroundColor:"#fff", color:"#64748B", fontSize:"13px", cursor:"pointer", fontWeight:"500" }}>닫기</button>
+            {extracted && (
+              <button onClick={handleRegister} disabled={saving}
+                style={{ padding:"8px 24px", border:"none", borderRadius:"8px", backgroundColor: saving ? "#CBD5E1" : "#2563EB", color:"#fff", fontSize:"13px", cursor: saving ? "not-allowed" : "pointer", fontWeight:"700", display:"flex", alignItems:"center", gap:"6px" }}>
+                {saving
+                  ? <><span style={{ display:"inline-block", width:"13px", height:"13px", border:"2px solid rgba(255,255,255,0.3)", borderTopColor:"#fff", borderRadius:"50%", animation:"spin 0.8s linear infinite" }}></span> 등록 중...</>
+                  : "✚ 등록"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );

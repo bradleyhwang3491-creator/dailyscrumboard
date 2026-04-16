@@ -316,10 +316,8 @@ function CanvasEditor({ onImageReady, editorWidth = 560 }) {
     notifyParent();
   }
 
-  /* ── 이미지 업로드 ── */
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /* ── 이미지 공통 로드 ── */
+  function loadImageFile(file) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
@@ -343,6 +341,30 @@ function CanvasEditor({ onImageReady, editorWidth = 560 }) {
     };
     reader.readAsDataURL(file);
   }
+
+  /* ── 파일 선택 업로드 ── */
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    loadImageFile(file);
+  }
+
+  /* ── 클립보드 붙여넣기 (Ctrl+V) ── */
+  useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) loadImageFile(file);
+          break;
+        }
+      }
+    }
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []); // eslint-disable-line
 
   /* ── 좌표 변환 ── */
   function getPos(e) {
@@ -581,16 +603,43 @@ function CanvasEditor({ onImageReady, editorWidth = 560 }) {
       </div>
 
       {/* 업로드 영역 */}
-      <label style={{
+      <div style={{
         flex: 1, display: hasImage ? "none" : "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", border: "2px dashed #CBD5E1", borderRadius: "10px",
-        cursor: "pointer", gap: "10px", backgroundColor: "#F8FAFC",
+        gap: "10px", backgroundColor: "#F8FAFC",
       }}>
         <span style={{ fontSize: "40px" }}>🖼️</span>
-        <span style={{ fontSize: "14px", color: "#64748B", fontWeight: "600" }}>클릭하여 이미지 업로드</span>
-        <span style={{ fontSize: "12px", color: "#94A3B8" }}>PNG, JPG, GIF · 원본 사이즈 지원</span>
-        <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
-      </label>
+        {/* 파일 선택 버튼 */}
+        <label style={{ cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+          <span style={{ fontSize: "14px", color: "#2563EB", fontWeight: "700",
+            padding: "7px 20px", border: "1.5px solid #93C5FD", borderRadius: "8px",
+            backgroundColor: "#EFF6FF" }}>
+            📁 파일 선택 (클릭)
+          </span>
+          <span style={{ fontSize: "11px", color: "#94A3B8" }}>PNG, JPG, GIF · 원본 사이즈 지원</span>
+          <input type="file" accept="image/*" onChange={handleFileChange} style={{ display: "none" }} />
+        </label>
+        {/* 구분선 */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", width: "60%", maxWidth: "280px" }}>
+          <div style={{ flex: 1, height: "1px", backgroundColor: "#E2E8F0" }} />
+          <span style={{ fontSize: "11px", color: "#CBD5E1", flexShrink: 0 }}>또는</span>
+          <div style={{ flex: 1, height: "1px", backgroundColor: "#E2E8F0" }} />
+        </div>
+        {/* 붙여넣기 안내 */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <kbd style={{ padding: "2px 7px", border: "1px solid #CBD5E1", borderRadius: "4px",
+              backgroundColor: "#F1F5F9", fontSize: "12px", fontWeight: "700", color: "#475569",
+              fontFamily: "monospace", boxShadow: "0 1px 0 #CBD5E1" }}>Ctrl</kbd>
+            <span style={{ fontSize: "12px", color: "#94A3B8", fontWeight: "600" }}>+</span>
+            <kbd style={{ padding: "2px 7px", border: "1px solid #CBD5E1", borderRadius: "4px",
+              backgroundColor: "#F1F5F9", fontSize: "12px", fontWeight: "700", color: "#475569",
+              fontFamily: "monospace", boxShadow: "0 1px 0 #CBD5E1" }}>V</kbd>
+            <span style={{ fontSize: "13px", color: "#64748B", fontWeight: "600" }}>로 스크린샷 붙여넣기</span>
+          </div>
+          <span style={{ fontSize: "11px", color: "#94A3B8" }}>캡처 후 바로 붙여넣으면 자동으로 불러옵니다</span>
+        </div>
+      </div>
 
       {/* 캔버스 뷰어 */}
       <div ref={scrollRef} style={{
@@ -1692,7 +1741,7 @@ export default function IssueManagePage() {
                     borderBottom:"1px solid #BAE6FD", flexShrink:0,
                     display:"flex", alignItems:"center", justifyContent:"space-between" }}>
                     <span style={{ fontSize:"13px", color:"#0369A1" }}>
-                      🖼️ &nbsp;오류 화면을 업로드하고 펜·도형·텍스트로 표시하세요.&nbsp;
+                      🖼️ &nbsp;파일 선택 또는 <strong>Ctrl+V 붙여넣기</strong>로 오류 화면을 첨부하세요.&nbsp;
                       <strong>이미지 첨부는 선택사항입니다.</strong>
                     </span>
                     {imageBlob && (

@@ -519,7 +519,8 @@ function MainPage() {
             {subBtn("weekly-board", t("nav.menus.weeklyTaskBoard"))}
             {subBtn("yearly-board", t("nav.menus.yearlyTaskBoard"))}
             {CRM_USER_IDS.includes(user?.id) && subBtn("yearly-board-crm", t("nav.menus.yearlyTaskBoardCRM"))}
-            {subBtn("ai-report",    t("nav.menus.aiWeeklyReport"))}
+            {/* AI Weekly Report 메뉴 비활성화 */}
+            {/* {subBtn("ai-report",    t("nav.menus.aiWeeklyReport"))} */}
           </div>
         )}
       </div>

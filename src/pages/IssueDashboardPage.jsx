@@ -512,17 +512,16 @@ ${JSON.stringify(impData, null, 2)}
                   <p style={{ margin:"2px 0 0", fontSize:"12px", color:"#64748B" }}>조회된 RAW DATA 전체를 Gemini AI로 분석합니다</p>
                 </div>
               </div>
-              <button onClick={handleAiAnalysis} disabled={aiLoading || !rows.length} style={{
+              <button disabled style={{
                 padding:"10px 22px", borderRadius:"8px",
-                background: aiLoading ? "#374151" : "linear-gradient(135deg,#6366F1,#8B5CF6)",
-                border:"none", color:"#fff", fontSize:"13px", fontWeight:"700",
-                cursor: aiLoading || !rows.length ? "not-allowed" : "pointer",
-                fontFamily:"'Pretendard', sans-serif", opacity: !rows.length ? 0.5 : 1,
+                background: "#374151",
+                border:"none", color:"#94A3B8", fontSize:"13px", fontWeight:"700",
+                cursor: "not-allowed",
+                fontFamily:"'Pretendard', sans-serif", opacity: 0.45,
                 display:"flex", alignItems:"center", gap:"8px",
+                title:"현재 사용 불가"
               }}>
-                {aiLoading
-                  ? <><Spinner />분석 중...</>
-                  : "✨ AI 리포트 생성"}
+                ✨ AI 리포트 생성 (준비중)
               </button>
             </div>
 
