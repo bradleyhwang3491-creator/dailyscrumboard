@@ -832,6 +832,7 @@ export default function IssueManagePage() {
     if (searchSystemNms.length) q = q.or(searchSystemNms.map(s => `SYSTEM_NM.ilike.%${s}%`).join(","));
     if (searchComplete === "Y") q = q.eq("COMPLETE_YN", "Y");
     if (searchComplete === "N") q = q.or("COMPLETE_YN.eq.N,COMPLETE_YN.is.null");
+    if (searchComplete === "C") q = q.eq("COMPLETE_YN", "C");
     const { data, error } = await q;
     if (error) { console.error("조회 오류:", error.message); }
     setRows(data ?? []);
@@ -915,6 +916,22 @@ export default function IssueManagePage() {
     setAccepting(false);
     if (error) { alert("접수 오류: " + error.message); return; }
     if (detailRow) { await refreshDetailRow(id); } else { handleSearch(); }
+  }
+
+  async function handleFinalComplete() {
+    if (!selectedId) { alert("최종점검완료 처리할 이슈를 선택해주세요."); return; }
+    const row = rows.find(r => r.ID === selectedId);
+    if (row?.COMPLETE_YN === "C") { alert("이미 최종점검완료 처리된 이슈입니다."); return; }
+    if (!window.confirm(`선택한 이슈(ID: ${selectedId})를 최종점검완료 처리하시겠습니까?`)) return;
+
+    const { error } = await supabase
+      .from("SYSTEM_ERRORREPORT")
+      .update({ COMPLETE_YN: "C" })
+      .eq("ID", selectedId);
+
+    if (error) { alert("처리 오류: " + error.message); return; }
+    alert("최종점검완료 처리되었습니다.");
+    handleSearch();
   }
 
   async function handleFixSave(rowId) {
@@ -1520,7 +1537,7 @@ export default function IssueManagePage() {
           <div style={{ ...im.field, width:"100px" }}>
             <label style={im.label}>조치여부</label>
             <select style={im.select} value={searchComplete} onChange={e => setSearchComplete(e.target.value)}>
-              <option value="">전체</option><option value="Y">조치완료</option><option value="N">미완료</option>
+              <option value="">전체</option><option value="Y">조치완료</option><option value="N">미완료</option><option value="C">최종점검완료</option>
             </select>
           </div>
           <div style={{ ...im.field, justifyContent:"flex-end" }}>
@@ -1546,6 +1563,13 @@ export default function IssueManagePage() {
         </button>
         <button style={im.actionBtn} onClick={() => { setRegForm(INIT_REG); setRegErr({}); setImageBlob(null); setRegStep(1); setShowReg(true); }}>
           + 이슈등록
+        </button>
+        <button
+          style={{ ...im.actionBtn, backgroundColor: selectedId ? "#7C3AED" : "#C4B5FD", cursor: selectedId ? "pointer" : "not-allowed" }}
+          onClick={handleFinalComplete}
+          disabled={!selectedId}
+          title={selectedId ? `ID ${selectedId} 최종점검완료 처리` : "이슈를 선택하세요"}>
+          ✅ 최종점검완료
         </button>
       </div>
 
