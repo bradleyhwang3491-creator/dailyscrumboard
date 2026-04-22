@@ -703,6 +703,7 @@ export default function IssueManagePage() {
   const getMonthAgo = () => { const d = new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().split("T")[0]; };
 
   const [searchTask,     setSearchTask]     = useState("");
+  const [searchDateType, setSearchDateType] = useState("INSERT_DT"); // 이슈등록일 | 조치완료일
   const [searchFrom,     setSearchFrom]     = useState(getMonthAgo);
   const [searchTo,       setSearchTo]       = useState(getToday);
   const [searchTestGubun, setSearchTestGubun] = useState("");
@@ -823,8 +824,9 @@ export default function IssueManagePage() {
         q = q.in("INSERT_ID", deptIds);
       }
     }
-    if (searchFrom)             q = q.gte("INSERT_DT", searchFrom);
-    if (searchTo)               q = q.lte("INSERT_DT", searchTo);
+    const dateCol = searchDateType === "FIX_DATE" ? "FIX_DATE" : "INSERT_DT";
+    if (searchFrom)             q = q.gte(dateCol, searchFrom);
+    if (searchTo)               q = q.lte(dateCol, searchTo);
     if (searchTestGubun)        q = q.eq("TEST_GUBUN", searchTestGubun);
     if (searchErrGubun)         q = q.eq("ERROR_GUBUN", searchErrGubun);
     if (searchLevel)            q = q.eq("IMPORTANT_LEVEL", searchLevel);
@@ -842,7 +844,7 @@ export default function IssueManagePage() {
   }
 
   function handleReset() {
-    setSearchTask(""); setSearchFrom(getMonthAgo()); setSearchTo(getToday());
+    setSearchTask(""); setSearchDateType("INSERT_DT"); setSearchFrom(getMonthAgo()); setSearchTo(getToday());
     setSearchTestGubun(""); setSearchErrGubun(""); setSearchLevel(""); setSearchManagers([]);
     setSearchTitle(""); setSearchId(""); setSearchComplete(""); setSearchSystemNms([]); setRows([]); setSearched(false); setSelectedId(null);
   }
@@ -1484,8 +1486,15 @@ export default function IssueManagePage() {
               {tm1List.map(t => <option key={t.TASK_ID} value={t.TASK_ID}>{t.TASK_NAME}</option>)}
             </select>
           </div>
+          <div style={{ ...im.field, width:"110px" }}>
+            <label style={im.label}>일자구분</label>
+            <select style={im.select} value={searchDateType} onChange={e => setSearchDateType(e.target.value)}>
+              <option value="INSERT_DT">이슈등록일</option>
+              <option value="FIX_DATE">조치완료일</option>
+            </select>
+          </div>
           <div style={im.field}>
-            <label style={im.label}>이슈등록일</label>
+            <label style={im.label}>날짜</label>
             <div style={{ display:"flex", alignItems:"center", gap:"6px" }}>
               <input type="date" style={im.dateInput} value={searchFrom} onChange={e => setSearchFrom(e.target.value)} />
               <span style={{ color:"#94A3B8" }}>~</span>
