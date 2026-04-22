@@ -1635,7 +1635,8 @@ export default function IssueManagePage() {
             </thead>
             <tbody>
               {pageRows.map((row, idx) => {
-                const isComplete = row.COMPLETE_YN === "Y";
+                const completeYn = row.COMPLETE_YN;
+                const isComplete = completeYn === "Y";
                 const isSelected = row.ID === selectedId;
                 const absIdx = (page - 1) * PAGE_SIZE + idx;
                 return (
@@ -1663,9 +1664,19 @@ export default function IssueManagePage() {
                     </td>
                     <td style={{ ...im.td, textAlign:"center", color:"#64748B" }}>{formatDate(row.FIX_REQUEST_DATE)}</td>
                     <td style={{ ...im.td, textAlign:"center" }}>
-                      <span style={{ display:"inline-block", padding:"2px 10px", borderRadius:"12px", fontSize:"11px", fontWeight:"600", backgroundColor: isComplete?"#DCFCE7":"#FEF3C7", color: isComplete?"#16A34A":"#D97706" }}>
-                        {isComplete ? "✓ 완료" : "⏳ 미완료"}
-                      </span>
+                      {(() => {
+                        const map = {
+                          Y: { label:"✓ 조치완료",     bg:"#DCFCE7", color:"#16A34A" },
+                          C: { label:"🔍 최종점검완료", bg:"#EDE9FE", color:"#7C3AED" },
+                          N: { label:"⏳ 미완료",       bg:"#FEF3C7", color:"#D97706" },
+                        };
+                        const s = map[completeYn] ?? map["N"];
+                        return (
+                          <span style={{ display:"inline-block", padding:"2px 10px", borderRadius:"12px", fontSize:"11px", fontWeight:"600", backgroundColor: s.bg, color: s.color, whiteSpace:"nowrap" }}>
+                            {s.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td style={{ ...im.td, textAlign:"center", color:"#64748B" }}>{formatDate(row.FIX_DATE)}</td>
                     <td style={{ ...im.td, textAlign:"center" }}>{userMap[row.FIX_ID] ?? (row.FIX_ID || "-")}</td>
