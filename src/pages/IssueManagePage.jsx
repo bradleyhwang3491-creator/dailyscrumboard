@@ -710,6 +710,7 @@ export default function IssueManagePage() {
   const [searchLevel,     setSearchLevel]     = useState("");
   const [searchManagers, setSearchManagers] = useState([]);
   const [searchTitle,    setSearchTitle]    = useState("");
+  const [searchId,       setSearchId]       = useState("");
   const [searchComplete,  setSearchComplete]  = useState("");
   const [searchSystemNms, setSearchSystemNms] = useState([]); // 시스템명 멀티선택
 
@@ -722,7 +723,7 @@ export default function IssueManagePage() {
 
   // 컬럼 리사이즈
   const COL_HEADERS = ["ID","프로젝트","테스트구분","오류구분","중요도","시스템명","화면명","이슈제목","완료요청일","완료여부","완료일자","조치담당자","접수자","접수일자","연관담당자","등록일자","등록자"];
-  const COL_INIT_W  = [55,120,100,80,70,100,110,200,90,80,90,90,80,90,120,90,80];
+  const COL_INIT_W  = [55,120,100,80,70,100,110,200,90,140,90,90,80,90,120,90,80];
   const [colWidths, setColWidths] = useState(COL_INIT_W);
   const resizingCol = useRef(null); // { idx, startX, startW }
 
@@ -829,6 +830,7 @@ export default function IssueManagePage() {
     if (searchLevel)            q = q.eq("IMPORTANT_LEVEL", searchLevel);
     if (searchManagers.length)  q = q.in("MANAGE_ID", searchManagers);
     if (searchTitle.trim())     q = q.ilike("ERROR_TITLE", `%${searchTitle.trim()}%`);
+    if (searchId.trim())        q = q.eq("ID", Number(searchId.trim()));
     if (searchSystemNms.length) q = q.or(searchSystemNms.map(s => `SYSTEM_NM.ilike.%${s}%`).join(","));
     if (searchComplete === "Y") q = q.eq("COMPLETE_YN", "Y");
     if (searchComplete === "N") q = q.or("COMPLETE_YN.eq.N,COMPLETE_YN.is.null");
@@ -842,7 +844,7 @@ export default function IssueManagePage() {
   function handleReset() {
     setSearchTask(""); setSearchFrom(getMonthAgo()); setSearchTo(getToday());
     setSearchTestGubun(""); setSearchErrGubun(""); setSearchLevel(""); setSearchManagers([]);
-    setSearchTitle(""); setSearchComplete(""); setSearchSystemNms([]); setRows([]); setSearched(false); setSelectedId(null);
+    setSearchTitle(""); setSearchId(""); setSearchComplete(""); setSearchSystemNms([]); setRows([]); setSearched(false); setSelectedId(null);
   }
 
   async function handleRegSave() {
@@ -1528,10 +1530,17 @@ export default function IssueManagePage() {
               placeholder="전체"
             />
           </div>
-          <div style={{ ...im.field, width:"280px" }}>
+          <div style={{ ...im.field, width:"140px" }}>
             <label style={im.label}>이슈제목</label>
             <input style={im.input} placeholder="이슈 제목 검색..."
               value={searchTitle} onChange={e => setSearchTitle(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()} />
+          </div>
+          <div style={{ ...im.field, width:"70px" }}>
+            <label style={im.label}>ID</label>
+            <input style={{ ...im.input, textAlign:"center" }} placeholder="ID"
+              type="number" min="1"
+              value={searchId} onChange={e => setSearchId(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleSearch()} />
           </div>
           <div style={{ ...im.field, width:"100px" }}>
@@ -1666,9 +1675,9 @@ export default function IssueManagePage() {
                     <td style={{ ...im.td, textAlign:"center" }}>
                       {(() => {
                         const map = {
-                          Y: { label:"✓ 조치완료",     bg:"#DCFCE7", color:"#16A34A" },
-                          C: { label:"🔍 최종점검완료", bg:"#EDE9FE", color:"#7C3AED" },
-                          N: { label:"⏳ 미완료",       bg:"#FEF3C7", color:"#D97706" },
+                          Y: { label:"조치완료",     bg:"#EFF6FF", color:"#1D4ED8" },
+                          C: { label:"최종점검완료", bg:"#F1F5F9", color:"#475569" },
+                          N: { label:"미완료",       bg:"#FEF2F2", color:"#DC2626" },
                         };
                         const s = map[completeYn] ?? map["N"];
                         return (
