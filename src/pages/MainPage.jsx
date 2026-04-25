@@ -17,6 +17,7 @@ import SystemNoticePage from "./SystemNoticePage";
 import HelpBradleyPage from "./HelpBradleyPage";
 import IssueManagePage from "./IssueManagePage";
 import IssueDashboardPage from "./IssueDashboardPage";
+import ProjectTestPage from "./ProjectTestPage";
 
 const ADMIN_ID = "SUNGHYUN_HWANG";
 const CRM_USER_IDS = ["SUNAH.HAN", "JIYUN.LEE", "SUNBIN.LEE", "YEONHEE.CHOI"];
@@ -422,6 +423,7 @@ function MainPage() {
     "help-bradley":     "HELP BOARD",
     "issue-manage":     "Issue Manage",
     "issue-dashboard":  "Issue Dashboard",
+    "project-test":     "Project Test",
   };
 
   function handleLogout() {
@@ -540,6 +542,7 @@ function MainPage() {
           <div style={subWrap}>
             {subBtn("issue-manage",    "Issue Manage")}
             {subBtn("issue-dashboard", "Issue Dashboard")}
+            {subBtn("project-test",    "Project Test")}
           </div>
         )}
       </div>
@@ -712,6 +715,8 @@ function MainPage() {
             <IssueManagePage />
           ) : activeMenu === "issue-dashboard" ? (
             <IssueDashboardPage />
+          ) : activeMenu === "project-test" ? (
+            <ProjectTestPage />
           ) : (
             <div style={styles.contentArea}>
               {activeMenu ? (
