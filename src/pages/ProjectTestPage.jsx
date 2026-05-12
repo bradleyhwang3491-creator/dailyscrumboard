@@ -571,6 +571,9 @@ export default function ProjectTestPage() {
   const [menu1Names,  setMenu1Names]  = useState([]);
   const [menu2Names,  setMenu2Names]  = useState([]);
 
+  /* 테스트케이스 생성 */
+  const [tcCreating, setTcCreating] = useState(false);
+
   /* 마스터 목록 */
   const [menuList,     setMenuList]     = useState([]);
   const [selectedMenu, setSelectedMenu] = useState(null);
@@ -687,6 +690,72 @@ export default function ProjectTestPage() {
   function handleReset() {
     setSearchSystem(""); setSearchMenu1(""); setSearchMenu2("");
     handleSearch("", "", "");
+  }
+
+  /* ── 테스트케이스 일괄 생성 ── */
+  async function handleCreateTestCases() {
+    if (menuList.length === 0) {
+      alert("먼저 조회 버튼을 눌러 시스템/화면 목록을 불러오세요.");
+      return;
+    }
+    if (!window.confirm(
+      `조회된 ${menuList.length}개 메뉴의 점검항목 전체를 기반으로 테스트케이스를 생성하시겠습니까?`
+    )) return;
+
+    setTcCreating(true);
+    try {
+      const userId = user?.id ?? "";
+
+      // 1. 현재 사용자의 최대 TEST_SEQUENCE 조회
+      const { data: seqData } = await supabase
+        .from("SYSTEM_TEST_RESULT")
+        .select("TEST_SEQUENCE")
+        .eq("TESTER_ID", userId)
+        .order("TEST_SEQUENCE", { ascending: false })
+        .limit(1);
+      const nextSeq = seqData && seqData.length > 0
+        ? (seqData[0].TEST_SEQUENCE ?? 0) + 1
+        : 1;
+
+      // 2. 현재 menuList의 모든 PLAN 데이터 조회
+      const menuIds = menuList.map(m => m.ID);
+      const { data: planData, error: planErr } = await supabase
+        .from("SYSTEM_TEST_PLANDATA")
+        .select("PLAN_ID, ID")
+        .in("ID", menuIds);
+      if (planErr) throw new Error("점검항목 조회 오류: " + planErr.message);
+      if (!planData || planData.length === 0) {
+        alert("조회된 메뉴에 등록된 점검항목이 없습니다.\n먼저 점검항목을 등록해주세요.");
+        setTcCreating(false);
+        return;
+      }
+
+      // 3. SYSTEM_TEST_RESULT INSERT
+      const now = new Date().toISOString();
+      const rows = planData.map(p => ({
+        TESTER_ID:     userId,
+        TEST_SEQUENCE: nextSeq,
+        PLAN_ID:       p.PLAN_ID,
+        ID:            p.ID,          // SYSTEM_MENU_MASTER PK
+        STATUS:        "테스트중",
+        DEPT_CD:       deptCd || null,
+        USR_CD:        userId,
+        SYS_DT:        now,
+      }));
+
+      const { error: insErr } = await supabase.from("SYSTEM_TEST_RESULT").insert(rows);
+      if (insErr) throw new Error("테스트케이스 생성 오류: " + insErr.message);
+
+      alert(
+        `테스트케이스 생성 완료!\n` +
+        `- 생성 건수: ${rows.length}건\n` +
+        `- TEST_SEQUENCE: ${nextSeq}`
+      );
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setTcCreating(false);
+    }
   }
 
   /* ── 점검항목 조회 ── */
@@ -901,7 +970,6 @@ export default function ProjectTestPage() {
         <div style={pt.searchField}>
           <label style={pt.label}>시스템명</label>
           <select style={pt.select} value={searchSystem} onChange={e => setSearchSystem(e.target.value)}>
-            <option value="">전체</option>
             {systemNames.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
@@ -923,6 +991,21 @@ export default function ProjectTestPage() {
           <button style={pt.resetBtn} onClick={handleReset}>초기화</button>
           <button style={pt.searchBtn} onClick={() => handleSearch()} disabled={loading}>
             {loading ? "조회중..." : "🔍 조회"}
+          </button>
+          <button
+            style={{
+              fontFamily:"'Pretendard',sans-serif", fontSize:"13px", fontWeight:"700",
+              color: tcCreating ? "#94A3B8" : "#FFFFFF",
+              backgroundColor: tcCreating ? "#F1F5F9" : "#7C3AED",
+              border:"none", borderRadius:"7px", padding:"7px 18px",
+              cursor: tcCreating ? "not-allowed" : "pointer",
+              whiteSpace:"nowrap",
+            }}
+            onClick={handleCreateTestCases}
+            disabled={tcCreating || menuList.length === 0}
+            title={menuList.length === 0 ? "먼저 조회 버튼을 눌러 목록을 불러오세요" : "조회된 점검항목 전체로 테스트케이스 생성"}
+          >
+            {tcCreating ? "⏳ 생성중..." : "📋 테스트케이스 생성"}
           </button>
         </div>
       </div>
