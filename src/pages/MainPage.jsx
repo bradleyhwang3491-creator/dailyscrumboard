@@ -342,10 +342,7 @@ function MainPage() {
   const { t } = useLanguage();
   const isMobile = useBreakpoint(768);
 
-  const [activeMenu,  setActiveMenu]  = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("menu") || "dashboard";
-  });
+  const [activeMenu,  setActiveMenu]  = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // 자동 로그아웃 메시지 표시
@@ -442,8 +439,7 @@ function MainPage() {
   const [adminOpen,         setAdminOpen]         = useState(false);
 
   function handleMenuClick(id) {
-    const base = window.location.origin + window.location.pathname;
-    window.open(`${base}?menu=${id}`, "_blank");
+    setActiveMenu(id);
     setSidebarOpen(false);
   }
 
